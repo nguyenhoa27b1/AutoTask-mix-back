@@ -1,0 +1,1 @@
+{"task":{"id_task":14,"title":"E2E Task 1 - BEFORE","description":"E2E test","priority":2,"deadline":"2025-11-23","date_created":"2025-11-18T03:44:11.752Z","date_submit":"2025-11-18T03:44:12.017Z","id_file":null,"submit_file_id":6,"score":1,"status":"Completed"},"file":{"id_file":6,"name":"e2e-test-file.txt","url":"/files/6/download"}}

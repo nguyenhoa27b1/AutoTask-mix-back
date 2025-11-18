@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { User } from '../types';
+import { getUserDisplayName } from '../utils/userHelpers';
 
 interface HeaderProps {
   currentUser: User | null;
@@ -17,7 +18,7 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout }) => {
           </div>
           {currentUser && (
             <div className="flex items-center">
-               {currentUser.picture && (
+              {currentUser.picture && (
                 <img
                   src={currentUser.picture}
                   alt="Profile"
@@ -26,10 +27,10 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout }) => {
               )}
               <div className="text-right mr-4 hidden sm:block">
                 <p className="text-gray-700 dark:text-gray-300">
-                  Welcome, <span className="font-semibold">{currentUser.name || currentUser.email}</span>
+                  Welcome, <span className="font-semibold">{getUserDisplayName(currentUser)}</span>
                 </p>
                 <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium capitalize">
-                    {currentUser.role}
+                  {currentUser.role}
                 </p>
               </div>
               <button

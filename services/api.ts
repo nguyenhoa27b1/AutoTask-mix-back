@@ -1,151 +1,129 @@
 import { User, Task, Role, AppFile, Priority, GoogleProfile } from '../types';
 
-// --- MOCK DATABASE ---
+// Backend API base URL (use IPv4 loopback to avoid IPv6/localhost resolution issues on some setups)
+const API_BASE_URL = 'http://127.0.0.1:4000/api';
 
-let nextUserId = 3;
-let nextTaskId = 5;
-let nextFileId = 3;
+// Helper to make HTTP requests
+async function fetchFromBackend<T>(
+    endpoint: string,
+    options?: RequestInit
+): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await fetch(url, {
+        headers: {
+            // default JSON content-type; callers can override
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            ...options?.headers,
+        },
+        ...options,
+    });
 
-const mockUsers: (User & { passwordHash: string })[] = [
-  {
-    user_id: 1,
-    email: 'admin@example.com',
-    passwordHash: 'adminpassword', // In a real app, this would be a hash
-    role: Role.ADMIN,
-    name: 'Admin User',
-  },
-  {
-    user_id: 2,
-    email: 'user@example.com',
-    passwordHash: 'userpassword', // In a real app, this would be a hash
-    role: Role.USER,
-    name: 'Normal User',
-  },
-];
-
-const mockTasks: Task[] = [];
-
-const mockFiles: AppFile[] = [
-    {
-        id_file: 1,
-        id_user: 1,
-        name: 'design_brief.pdf',
-        url: 'about:blank', // In a real app, this would be a real URL
-    },
-    {
-        id_file: 2,
-        id_user: 2,
-        name: 'final_marketing_copy.docx',
-        url: 'about:blank',
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(error.error || `API error: ${response.status}`);
     }
-];
 
+    return response.json();
+}
 
-// This token will be stored in memory. For a production app, you might use localStorage or an in-memory store.
-let authToken: string | null = null;
+// This will store the logged in user in memory for the frontend
 let loggedInUser: User | null = null;
+let authToken: string | null = null;
 
-// Helper to simulate network delay
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper to check for @example.com domain
-const isExampleDomainUser = (email: string) => email.toLowerCase().endsWith('@example.com');
-
-
-// --- MOCK API IMPLEMENTATION ---
+// --- API IMPLEMENTATION (calls real backend) ---
 
 export const api = {
     // AUTH
     async login(email: string, password: string): Promise<User | null> {
-        await sleep(500); // Simulate network delay
-        const user = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (user && user.passwordHash === password) {
-            // In a real app, you would use bcrypt.compare()
-            const { passwordHash, ...userWithoutPassword } = user;
-            authToken = `mock-token-for-${user.user_id}`;
-            loggedInUser = userWithoutPassword;
-            return userWithoutPassword;
-        } else {
-            // Updated error message to reflect new whitelist policy
-            throw new Error("Login failed. Your account may not exist or the password was incorrect. Please contact an administrator for access.");
+        try {
+            // login returns { user, token }
+            const resp = await fetchFromBackend<{ user: User; token: string }>('/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password }),
+            });
+            loggedInUser = resp.user;
+            authToken = resp.token || null;
+            return resp.user;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Login failed');
         }
     },
     
     async loginWithGoogle(profile: GoogleProfile): Promise<User | null> {
-        await sleep(500);
-        let user = mockUsers.find(u => u.email.toLowerCase() === profile.email.toLowerCase());
-
-        // Special case for the super admin
-        if (profile.email.toLowerCase() === 'nguyenhoa27b1@gmail.com') {
-            if (!user) {
-                const newUser: User & { passwordHash: string } = {
-                    user_id: nextUserId++,
-                    email: profile.email,
-                    name: profile.name,
-                    picture: profile.picture,
-                    passwordHash: `google-user-${new Date().getTime()}`,
-                    role: Role.ADMIN,
-                };
-                mockUsers.push(newUser);
-                user = newUser;
-            } else {
-                user.role = Role.ADMIN; // Ensure role is always admin
-                user.name = profile.name;
-                user.picture = profile.picture;
-            }
-        }
-
-        if (user) {
-            // User is on the whitelist (exists in mockUsers), allow login
-            user.name = profile.name;
-            user.picture = profile.picture;
-            const { passwordHash, ...userWithoutPassword } = user;
-            authToken = `mock-token-for-${user.user_id}`;
-            loggedInUser = userWithoutPassword;
-            return userWithoutPassword;
-        } else {
-            // User not on whitelist, deny login
-            throw new Error("Access denied. Your account has not been registered by an administrator.");
+        try {
+            const user = await fetchFromBackend<User>('/login/google', {
+                method: 'POST',
+                body: JSON.stringify(profile),
+            });
+            loggedInUser = user;
+            return user;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Google login failed');
         }
     },
 
     async register(email: string, name: string, password: string): Promise<User | null> {
-        await sleep(500);
-        // Self-registration is disabled per requirements. Only an admin can add users.
-        throw new Error("Self-registration is disabled. Please contact an administrator to create an account.");
+        try {
+            const user = await fetchFromBackend<User>('/register', {
+                method: 'POST',
+                body: JSON.stringify({ email, name, password }),
+            });
+            loggedInUser = user;
+            return user;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Registration failed');
+        }
     },
 
-    logout() {
-        authToken = null;
-        loggedInUser = null;
+    async logout(): Promise<void> {
+        try {
+            await fetchFromBackend<{ ok: boolean }>('/logout', {
+                method: 'POST',
+            });
+            loggedInUser = null;
+        } catch (error) {
+            loggedInUser = null;
+            throw new Error(error instanceof Error ? error.message : 'Logout failed');
+        }
     },
     
     // DATA FETCHING
     async getUsers(): Promise<User[]> {
-        await sleep(300);
-        if (!authToken || !loggedInUser) throw new Error("Not authenticated");
-        
-        const usersWithoutPasswords = mockUsers.map(({ passwordHash, ...user }) => user);
-
-        // Demo users can only see other demo users
-        if (isExampleDomainUser(loggedInUser.email)) {
-            return usersWithoutPasswords.filter(u => isExampleDomainUser(u.email));
+        try {
+            return await fetchFromBackend<User[]>('/users', {
+                method: 'GET',
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to fetch users');
         }
-    
-        return usersWithoutPasswords;
     },
 
     async getTasks(): Promise<Task[]> {
-        await sleep(300);
-        if (!authToken) throw new Error("Not authenticated");
-        return [...mockTasks];
+        try {
+            return await fetchFromBackend<Task[]>('/tasks', {
+                method: 'GET',
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to fetch tasks');
+        }
     },
     
     async getFiles(): Promise<AppFile[]> {
-        await sleep(200);
-        if (!authToken) throw new Error("Not authenticated");
-        return [...mockFiles];
+        try {
+            return await fetchFromBackend<AppFile[]>('/files', {
+                method: 'GET',
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to fetch files');
+        }
+    },
+
+    // Helper to get file by ID (synchronous, for use in components)
+    getFileById(fileId: number): AppFile | undefined {
+        // This is a placeholder - in a real scenario, files would be fetched asynchronously
+        // For now, we return undefined and rely on the full getFiles() call
+        return undefined;
     },
     
     // TASK MANAGEMENT
@@ -154,174 +132,146 @@ export const api = {
         descriptionFile: File | null,
         currentUser: User,
     ): Promise<Task> {
-        await sleep(500);
-        if (!authToken) throw new Error("Not authenticated");
-        
-        // Domain restriction check for demo accounts
-        const assignee = mockUsers.find(u => u.user_id === taskData.assignee_id);
-        if (!assignee) throw new Error("Assignee not found.");
-        if (isExampleDomainUser(currentUser.email) && !isExampleDomainUser(assignee.email)) {
-            throw new Error("Demo users can only assign tasks to other @example.com users.");
-        }
+        try {
+            // If there's a description file, send as FormData (multipart)
+            if (descriptionFile) {
+                const formData = new FormData();
+                // Add task data as individual form fields
+                formData.append('title', taskData.title || '');
+                formData.append('description', taskData.description || '');
+                formData.append('deadline', taskData.deadline || new Date().toISOString());
+                formData.append('priority', String(taskData.priority || 2));
+                formData.append('assignee_id', String(taskData.assignee_id || currentUser.user_id));
+                formData.append('assigner_id', String(taskData.assigner_id || currentUser.user_id));
+                formData.append('status', taskData.status || 'Pending');
+                if (taskData.id_task) formData.append('id_task', String(taskData.id_task));
+                // Add the file
+                formData.append('file', descriptionFile);
 
-        if (descriptionFile) {
-            const newFile: AppFile = {
-                id_file: nextFileId++,
-                id_user: currentUser.user_id,
-                name: descriptionFile.name,
-                url: URL.createObjectURL(descriptionFile),
-            };
-            mockFiles.push(newFile);
-            taskData.id_file = newFile.id_file;
-        }
+                const headers: HeadersInit = {};
+                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-        if (taskData.id_task) { // Update existing task
-            const taskIndex = mockTasks.findIndex(t => t.id_task === taskData.id_task);
-            if (taskIndex > -1) {
-                mockTasks[taskIndex] = { ...mockTasks[taskIndex], ...taskData };
-                return mockTasks[taskIndex];
-            } else {
-                throw new Error("Task not found");
+                const response = await fetch(`${API_BASE_URL}/tasks`, {
+                    method: 'POST',
+                    body: formData,
+                    headers,
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ error: response.statusText }));
+                    throw new Error(error.error || `API error: ${response.status}`);
+                }
+
+                return await response.json();
             }
-        } else { // Create new task
-            const newTask: Task = {
+
+            // No file: send as JSON
+            const payload = {
                 ...taskData,
-                id_task: nextTaskId++,
-                date_created: new Date().toISOString(),
-                assigner_id: currentUser.user_id,
+                id_task: taskData.id_task || undefined,
             };
-            mockTasks.push(newTask);
-            return newTask;
+
+            return await fetchFromBackend<Task>('/tasks', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to save task');
         }
     },
 
     async deleteTask(taskId: number): Promise<boolean> {
-        await sleep(400);
-        if (!authToken) throw new Error("Not authenticated");
-        const taskIndex = mockTasks.findIndex(t => t.id_task === taskId);
-        if (taskIndex > -1) {
-            mockTasks.splice(taskIndex, 1);
+        try {
+            await fetchFromBackend<{ ok: boolean }>(`/tasks/${taskId}`, {
+                method: 'DELETE',
+            });
             return true;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to delete task');
         }
-        return false;
     },
     
     async submitTask(taskId: number, file: File, currentUser: User): Promise<Task> {
-        await sleep(600);
-        if (!authToken) throw new Error("Not authenticated");
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
 
-        const taskIndex = mockTasks.findIndex(t => t.id_task === taskId);
-        if (taskIndex === -1) {
-            throw new Error("Task not found");
+            // include Authorization header so server can attribute upload to authenticated user
+            const headers: HeadersInit = {};
+            if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+            const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/submit`, {
+                method: 'POST',
+                body: formData,
+                headers,
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: response.statusText }));
+                throw new Error(error.error || `API error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result.task;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to submit task');
         }
-
-        const newFile: AppFile = {
-            id_file: nextFileId++,
-            id_user: currentUser.user_id,
-            name: file.name,
-            url: URL.createObjectURL(file),
-        };
-        mockFiles.push(newFile);
-
-        const taskToSubmit = mockTasks[taskIndex];
-        const submissionDate = new Date();
-        const deadlineDate = new Date(taskToSubmit.deadline);
-
-        // Normalize dates to compare day-by-day, ignoring time
-        const submissionDay = new Date(submissionDate.getFullYear(), submissionDate.getMonth(), submissionDate.getDate());
-        const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
-        
-        let newScore = 0;
-        if (submissionDay < deadlineDay) {
-            newScore = 1; // Submitted before deadline
-        } else if (submissionDay > deadlineDay) {
-            newScore = -1; // Submitted after deadline
-        } else {
-            newScore = 0; // Submitted on the deadline
-        }
-
-        const updatedTask = {
-            ...taskToSubmit,
-            status: 'Completed' as 'Completed',
-            date_submit: submissionDate.toISOString(),
-            submit_file_id: newFile.id_file,
-            score: newScore,
-        };
-        mockTasks[taskIndex] = updatedTask;
-        return updatedTask;
     },
     
     // USER MANAGEMENT
     async addUser(email: string, role: Role): Promise<User> {
-        await sleep(400);
-        if (!authToken || loggedInUser?.role !== Role.ADMIN) throw new Error("Unauthorized");
-        
-        // Domain restriction for demo admins
-        if (isExampleDomainUser(loggedInUser.email) && !isExampleDomainUser(email)) {
-            throw new Error("Demo admins can only add users with @example.com email addresses.");
+        try {
+            return await fetchFromBackend<User>('/users', {
+                method: 'POST',
+                body: JSON.stringify({ email, role }),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to add user');
         }
-
-        if (mockUsers.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-            throw new Error("User with this email already exists.");
-        }
-        
-        const newUser: User & { passwordHash: string } = {
-            user_id: nextUserId++,
-            email,
-            passwordHash: 'defaultpassword123', // Set a default password
-            role,
-            name: email.split('@')[0],
-        };
-        mockUsers.push(newUser);
-        const { passwordHash, ...userWithoutPassword } = newUser;
-        return userWithoutPassword;
     },
 
     async updateUserRole(userId: number, role: Role): Promise<User> {
-        await sleep(300);
-        if (!authToken || loggedInUser?.role !== Role.ADMIN) throw new Error("Unauthorized");
-        
-        const userToUpdate = mockUsers.find(u => u.user_id === userId);
-        if (!userToUpdate) throw new Error("User not found");
-
-        if (isExampleDomainUser(loggedInUser.email) && !isExampleDomainUser(userToUpdate.email)) {
-            throw new Error("Demo admins can only update roles for @example.com users.");
-        }
-
-        const userIndex = mockUsers.findIndex(u => u.user_id === userId);
-        if (userIndex > -1) {
-            mockUsers[userIndex].role = role;
-            const { passwordHash, ...userWithoutPassword } = mockUsers[userIndex];
-            return userWithoutPassword;
-        } else {
-            throw new Error("User not found");
+        try {
+            return await fetchFromBackend<User>(`/users/${userId}/role`, {
+                method: 'PUT',
+                body: JSON.stringify({ role }),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to update user role');
         }
     },
 
     async deleteUser(userId: number): Promise<boolean> {
-        await sleep(400);
-        if (!authToken || loggedInUser?.role !== Role.ADMIN) throw new Error("Unauthorized");
-
-        const userIndex = mockUsers.findIndex(u => u.user_id === userId);
-        if (userIndex === -1) return false;
-        
-        const userToDelete = mockUsers[userIndex];
-
-        if (userToDelete.email.toLowerCase() === 'admin@example.com' || userToDelete.email.toLowerCase() === 'nguyenhoa27b1@gmail.com') {
-             throw new Error("Cannot delete administrative accounts.");
+        try {
+            await fetchFromBackend<{ ok: boolean }>(`/users/${userId}`, {
+                method: 'DELETE',
+            });
+            return true;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to delete user');
         }
+    },
 
-        if (isExampleDomainUser(loggedInUser.email) && !isExampleDomainUser(userToDelete.email)) {
-            throw new Error("Demo admins can only delete users with @example.com email addresses.");
+    // FILE DOWNLOAD (fetch with Authorization and trigger browser download)
+    async downloadFile(fileId: number, suggestedName?: string): Promise<void> {
+        const host = API_BASE_URL.replace(/\/api\/?$/, '');
+        const url = `${host}/files/${fileId}/download`;
+        const headers: HeadersInit = {};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+        const resp = await fetch(url, { method: 'GET', headers });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: resp.statusText }));
+            throw new Error(err.error || `Download failed: ${resp.status}`);
         }
-        
-        mockUsers.splice(userIndex, 1);
-        // Also un-assign tasks from this user, or re-assign them
-        mockTasks.forEach(task => {
-            if (task.assignee_id === userId) {
-                task.assignee_id = 1; // Re-assign to admin
-            }
-        });
-        return true;
+        const blob = await resp.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = suggestedName || `file-${fileId}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
     }
 };

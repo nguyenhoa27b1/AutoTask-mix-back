@@ -13,6 +13,7 @@ export interface User {
   user_id: number;
   email: string;
   role: Role;
+  isAdmin?: boolean;
   name?: string;
   picture?: string;
   // password hash would be here in a real backend
