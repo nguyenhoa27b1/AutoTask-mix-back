@@ -13,10 +13,10 @@ export interface User {
   user_id: number;
   email: string;
   role: Role;
-  isAdmin?: boolean;
-  name?: string;
-  picture?: string;
-  // password hash would be here in a real backend
+  isAdmin: boolean;        // Required - backend always returns this
+  name: string;            // Required - sanitizeUser ensures non-null string
+  picture: string;         // Required - sanitizeUser ensures non-null string (empty if no picture)
+  isWhitelisted?: boolean; // Optional - only relevant for Gmail users
 }
 
 export interface AppFile {
