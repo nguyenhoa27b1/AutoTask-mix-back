@@ -60,15 +60,17 @@ const Dashboard: React.FC<DashboardProps> = ({
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    // Calculate score based on all of the user's tasks, not the searched/filtered ones
-    return tasksForUser
+    // Calculate score ONLY for tasks assigned TO the current user (not tasks they created)
+    return tasks
       .filter(task => {
+        // Only count tasks where current user is the ASSIGNEE
+        if (task.assignee_id !== currentUser.user_id) return false;
         if (task.status !== 'Completed' || !task.date_submit) return false;
         const submitDate = new Date(task.date_submit);
         return submitDate.getMonth() === currentMonth && submitDate.getFullYear() === currentYear;
       })
       .reduce((total, task) => total + (task.score ?? 0), 0);
-  }, [tasksForUser]);
+  }, [tasks, currentUser.user_id]);
 
   const rankedUsers = useMemo(() => {
     if (!isAdmin) return users;
