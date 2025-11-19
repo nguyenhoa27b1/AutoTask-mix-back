@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -11,18 +14,26 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // --- Email Configuration ---
-// Create a test/mock email transporter (for development, logs to console instead of sending real emails)
-const emailTransporter = nodemailer.createTransport({
-  host: 'smtp.example.com', // Mock SMTP - will log to console instead
-  port: 587,
-  secure: false,
-  auth: {
-    user: 'mock@example.com',
-    pass: 'mockpassword'
-  },
-  // For development: use jsonTransport to avoid actual email sending
-  jsonTransport: true
-});
+// Set USE_REAL_EMAIL to true to send actual emails via Gmail
+const USE_REAL_EMAIL = process.env.USE_REAL_EMAIL === 'true' || false;
+
+// Gmail SMTP configuration (requires App Password from https://myaccount.google.com/apppasswords)
+const GMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com'; // Replace with your Gmail
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password-here'; // Replace with App Password
+
+// Create email transporter
+const emailTransporter = USE_REAL_EMAIL 
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: GMAIL_USER,
+        pass: GMAIL_APP_PASSWORD
+      }
+    })
+  : nodemailer.createTransport({
+      // Mock transport - logs to console instead of sending real emails
+      jsonTransport: true
+    });
 
 // Email helper functions
 const emailService = {
@@ -38,19 +49,36 @@ const emailService = {
     });
   },
 
-  // Send email notification (mock - logs to console)
+  // Send email notification
   async sendEmail(to, subject, htmlContent) {
     try {
-      console.log('\n[EMAIL SENT] =====================================');
-      console.log('To:', to);
-      console.log('Subject:', subject);
-      console.log('Content:', htmlContent);
-      console.log('=====================================================\n');
-      
-      // In production, you would actually send the email:
-      // await emailTransporter.sendMail({ from: '"TaskFlow System" <noreply@taskflow.com>', to, subject, html: htmlContent });
-      
-      return { success: true, messageId: `mock-${Date.now()}` };
+      if (USE_REAL_EMAIL) {
+        // Send real email via Gmail
+        const info = await emailTransporter.sendMail({
+          from: `"TaskFlow System" <${GMAIL_USER}>`,
+          to: to,
+          subject: subject,
+          html: htmlContent
+        });
+        
+        console.log('\n[EMAIL SENT] =====================================');
+        console.log('✅ Real email sent successfully!');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('Message ID:', info.messageId);
+        console.log('=====================================================\n');
+        
+        return { success: true, messageId: info.messageId };
+      } else {
+        // Mock mode - log to console only
+        console.log('\n[EMAIL SENT] ===================================== (MOCK MODE)');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('Content:', htmlContent);
+        console.log('=====================================================\n');
+        
+        return { success: true, messageId: `mock-${Date.now()}` };
+      }
     } catch (error) {
       console.error('[EMAIL ERROR]', error.message);
       return { success: false, error: error.message };
@@ -129,23 +157,24 @@ const emailService = {
   }
 };
 
-// Restrict CORS to the frontend origins used in development (ports 3000 and 3001).
-// Using an explicit list helps avoid intermittent CORS issues when testing locally.
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001',
-];
+// CORS configuration for development - allow all origins on port 3000/3001
+// In production, restrict to specific domains
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., curl, native apps)
+    // Allow requests with no origin (e.g., curl, native apps, Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    
+    // Allow any origin on port 3000 or 3001 (for network access during development)
+    try {
+      const url = new URL(origin);
+      if (url.port === '3000' || url.port === '3001') {
+        return callback(null, true);
+      }
+    } catch (e) {
+      // Invalid URL, reject
     }
+    
+    callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -606,10 +635,14 @@ cron.schedule('0 * * * *', () => {
 console.log('[EMAIL] Email notification system initialized');
 console.log('[CRON] Deadline reminder scheduler started (runs every hour)');
 
-// Bind explicitly to IPv4 loopback to avoid IPv6-only binding issues on some Windows setups
-const HOST = '127.0.0.1';
+// Bind to all network interfaces for network access (0.0.0.0)
+// Use HOST env variable to restrict if needed (e.g., HOST=127.0.0.1 for localhost-only)
+const HOST = process.env.HOST || '0.0.0.0';
 const server = app.listen(PORT, HOST, () => {
-  console.log(`Backend mock server running on http://${HOST}:${PORT}`);
+  console.log(`Backend server running on http://${HOST}:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    console.log('✅ Server accessible on network (all interfaces)');
+  }
   console.log('Server is listening...');
 });
 

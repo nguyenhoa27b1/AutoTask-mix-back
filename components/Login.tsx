@@ -66,15 +66,37 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
+    console.log('═══════════════════════════════════════════');
+    console.log('🔐 [LOGIN] Form submission started');
+    console.log('📧 Email:', email);
+    console.log('🌐 Current URL:', window.location.href);
+    console.log('🖥️  User Agent:', navigator.userAgent);
+    console.log('═══════════════════════════════════════════');
+    
     try {
+        console.log('⏳ [LOGIN] Calling onLogin function...');
         const success = await onLogin(email, password);
+        console.log('✅ [LOGIN] onLogin returned:', success);
+        
         if (!success) {
+            console.error('❌ [LOGIN] Login failed - success is false');
             setError("Login Failed: User not found or incorrect password.");
+        } else {
+            console.log('🎉 [LOGIN] Login successful!');
         }
     } catch (err) {
+        console.error('💥 [LOGIN] Exception caught:', err);
+        console.error('Error details:', {
+            message: (err as Error).message,
+            name: (err as Error).name,
+            stack: (err as Error).stack
+        });
         setError((err as Error).message || "An unexpected error occurred.");
     } finally {
         setLoading(false);
+        console.log('🏁 [LOGIN] Login process completed');
+        console.log('═══════════════════════════════════════════\n');
     }
   };
   
