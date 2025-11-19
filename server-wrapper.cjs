@@ -7,6 +7,7 @@ const multer = require('multer');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
+const path = require('path');
 
 // We'll accept uploads into memory first, then persist to disk in the submit handler.
 const upload = multer({ storage: multer.memoryStorage() });
@@ -157,29 +158,39 @@ const emailService = {
   }
 };
 
-// CORS configuration for development - allow all origins on port 3000/3001
-// In production, restrict to specific domains
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., curl, native apps, Postman)
-    if (!origin) return callback(null, true);
-    
-    // Allow any origin on port 3000 or 3001 (for network access during development)
-    try {
-      const url = new URL(origin);
-      if (url.port === '3000' || url.port === '3001') {
-        return callback(null, true);
+// CORS configuration
+// In production (same origin), CORS not needed since frontend + backend on same domain
+// In development, allow localhost:3000/3001 for separate Vite dev server
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+if (!IS_PRODUCTION) {
+  // Development mode: Allow CORS from Vite dev server
+  app.use(cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (e.g., curl, native apps, Postman)
+      if (!origin) return callback(null, true);
+      
+      // Allow any origin on port 3000 or 3001 (for network access during development)
+      try {
+        const url = new URL(origin);
+        if (url.port === '3000' || url.port === '3001') {
+          return callback(null, true);
+        }
+      } catch (e) {
+        // Invalid URL, reject
       }
-    } catch (e) {
-      // Invalid URL, reject
-    }
-    
-    callback(new Error('Not allowed by CORS'));
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+      
+      callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  }));
+} else {
+  // Production mode: No CORS needed (same origin)
+  console.log('📦 Production mode: CORS disabled (same origin)');
+}
+
 // Parse JSON and urlencoded bodies (support both modern fetch and form posts)
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -635,14 +646,31 @@ cron.schedule('0 * * * *', () => {
 console.log('[EMAIL] Email notification system initialized');
 console.log('[CRON] Deadline reminder scheduler started (runs every hour)');
 
+// --- Serve Static Frontend (Production) ---
+// Serve the built React app from 'dist' folder
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Catch-all route for SPA (must be LAST, after all API routes)
+// Handles client-side routing by serving index.html for non-API requests
+app.use((req, res, next) => {
+  // Skip if it's an API route
+  if (req.path.startsWith('/api/')) {
+    return next(); // Will result in 404 if API endpoint doesn't exist
+  }
+  // Serve React app for all other routes
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // Bind to all network interfaces for network access (0.0.0.0)
 // Use HOST env variable to restrict if needed (e.g., HOST=127.0.0.1 for localhost-only)
 const HOST = process.env.HOST || '0.0.0.0';
 const server = app.listen(PORT, HOST, () => {
-  console.log(`Backend server running on http://${HOST}:${PORT}`);
+  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
   if (HOST === '0.0.0.0') {
     console.log('✅ Server accessible on network (all interfaces)');
   }
+  console.log('📱 Frontend: Serving React app from /dist');
+  console.log('🔌 Backend API: Available at /api/*');
   console.log('Server is listening...');
 });
 

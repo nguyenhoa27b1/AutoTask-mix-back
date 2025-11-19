@@ -1,12 +1,12 @@
 import { User, Task, Role, AppFile, Priority, GoogleProfile } from '../types';
 
-// Backend API base URL - Auto-detect based on environment
-// In production (Vercel), uses same domain with /api prefix
-// In development, uses localhost:4000
+// Backend API base URL
+// In production (same domain), use relative path '/api'
+// In development (localhost), use localhost:4000
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? `http://${window.location.hostname}:4000/api`
-        : `${window.location.origin}/api`);
+    (import.meta.env.MODE === 'production' 
+        ? '/api'  // Production: same domain
+        : `http://${window.location.hostname}:4000/api`); // Dev: localhost:4000
 
 // Helper to make HTTP requests
 async function fetchFromBackend<T>(
