@@ -104,13 +104,36 @@ export const api = {
     
     async loginWithGoogle(profile: GoogleProfile): Promise<User | null> {
         try {
-            const user = await fetchFromBackend<User>('/login/google', {
+            console.log('🔵 [API] loginWithGoogle - Sending profile to backend:', profile.email);
+            
+            // Backend returns { user, token }
+            const resp = await fetchFromBackend<{ user: User; token: string }>('/login/google', {
                 method: 'POST',
                 body: JSON.stringify(profile),
             });
-            loggedInUser = user;
-            return user;
+            
+            console.log('🔵 [API] loginWithGoogle - Backend response:', resp);
+            console.log('🔵 [API] loginWithGoogle - User:', resp.user);
+            console.log('🔵 [API] loginWithGoogle - Token:', resp.token ? 'present' : 'MISSING');
+            
+            if (!resp.user) {
+                console.error('❌ [API] loginWithGoogle - No user in response!');
+                throw new Error('No user data received from backend');
+            }
+            
+            if (!resp.token) {
+                console.warn('⚠️ [API] loginWithGoogle - No token in response! This will cause authentication issues.');
+            }
+            
+            loggedInUser = resp.user;
+            authToken = resp.token || null;
+            
+            console.log('✅ [API] loginWithGoogle - Success! User:', resp.user.email, 'Token stored:', !!authToken);
+            
+            return resp.user;
         } catch (error) {
+            console.error('❌ [API] loginWithGoogle - Error:', error);
+            console.error('Error details:', error instanceof Error ? error.message : error);
             throw new Error(error instanceof Error ? error.message : 'Google login failed');
         }
     },

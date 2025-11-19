@@ -96,12 +96,28 @@ const App: React.FC = () => {
     };
 
     const handleGoogleLogin = (credentialResponse: any): Promise<boolean> => {
-        const profile = decodeJwt(credentialResponse.credential);
-        if (profile) {
-            return attemptLogin(api.loginWithGoogle(profile));
+        console.log('═══════════════════════════════════════════');
+        console.log('🟢 [APP] handleGoogleLogin called');
+        console.log('🟢 Credential response:', credentialResponse);
+        console.log('═══════════════════════════════════════════');
+        
+        try {
+            const profile = decodeJwt(credentialResponse.credential);
+            console.log('🟢 [APP] Decoded JWT profile:', profile);
+            
+            if (profile) {
+                console.log('🟢 [APP] Profile valid, calling attemptLogin...');
+                return attemptLogin(api.loginWithGoogle(profile));
+            }
+            
+            console.error('❌ [APP] Could not decode Google credential');
+            console.error('Credential string:', credentialResponse.credential?.substring(0, 50) + '...');
+            return Promise.resolve(false);
+        } catch (err) {
+            console.error('💥 [APP] Error in handleGoogleLogin:', err);
+            console.error('Error stack:', (err as Error).stack);
+            return Promise.resolve(false);
         }
-        console.error("Could not decode Google credential.");
-        return Promise.resolve(false);
     };
 
     const handleLogout = () => {
