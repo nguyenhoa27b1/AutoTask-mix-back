@@ -28,6 +28,12 @@ const Dashboard: React.FC<DashboardProps> = ({
     onDeleteUser,
     onViewUserTasks
 }) => {
+  console.log('🎯 [DASHBOARD] Rendering with currentUser:', currentUser);
+  console.log('🎯 [DASHBOARD] currentUser type:', typeof currentUser);
+  console.log('🎯 [DASHBOARD] currentUser.email:', currentUser?.email);
+  console.log('🎯 [DASHBOARD] currentUser keys:', currentUser ? Object.keys(currentUser) : 'undefined');
+  console.log('🎯 [DASHBOARD] Full currentUser JSON:', JSON.stringify(currentUser, null, 2));
+  
   const [searchTerm, setSearchTerm] = useState('');
   const isAdmin = currentUser.role === Role.ADMIN;
 
@@ -82,7 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-            <p className="text-gray-600 dark:text-gray-400">Welcome back, {currentUser.email.split('@')[0]}!</p>
+            <p className="text-gray-600 dark:text-gray-400">Welcome back, {currentUser?.email?.split('@')[0] || currentUser?.name || 'User'}!</p>
           </div>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
              <div className="text-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow">
