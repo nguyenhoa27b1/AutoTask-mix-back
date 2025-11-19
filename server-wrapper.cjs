@@ -6,6 +6,7 @@ const cors = require('cors');
 const multer = require('multer');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const cron = require('node-cron');
 const path = require('path');
 
@@ -15,26 +16,36 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // --- Email Configuration ---
-// Set USE_REAL_EMAIL to true to send actual emails via Gmail
-const USE_REAL_EMAIL = process.env.USE_REAL_EMAIL === 'true' || false;
+// Supports both Gmail SMTP and SendGrid API
+const USE_REAL_EMAIL = process.env.USE_REAL_EMAIL === 'true' || process.env.USE_REAL_MAIL === 'true' || false;
 
-// Gmail SMTP configuration (requires App Password from https://myaccount.google.com/apppasswords)
-const GMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com'; // Replace with your Gmail
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password-here'; // Replace with App Password
+// SendGrid API configuration (recommended for production - works on Render)
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL;
 
-// Create email transporter
-const emailTransporter = USE_REAL_EMAIL 
-  ? nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_APP_PASSWORD
-      }
-    })
-  : nodemailer.createTransport({
-      // Mock transport - logs to console instead of sending real emails
-      jsonTransport: true
-    });
+// Gmail SMTP configuration (for local dev only - blocked on Render free tier)
+const GMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password-here';
+
+// Determine email service to use
+const USE_SENDGRID = !!(SENDGRID_API_KEY && SENDGRID_FROM_EMAIL);
+
+// Initialize SendGrid if configured
+if (USE_SENDGRID) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  console.log('📧 Email service: SendGrid API');
+} else {
+  console.log('📧 Email service: Gmail SMTP (may not work on Render free tier)');
+}
+
+// Create Gmail transporter (fallback)
+const emailTransporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: GMAIL_USER,
+    pass: GMAIL_APP_PASSWORD
+  }
+});
 
 // Email helper functions
 const emailService = {
@@ -53,8 +64,38 @@ const emailService = {
   // Send email notification
   async sendEmail(to, subject, htmlContent) {
     try {
-      if (USE_REAL_EMAIL) {
-        // Send real email via Gmail
+      if (!USE_REAL_EMAIL) {
+        // Mock mode - log to console only
+        console.log('\n[EMAIL SENT] ===================================== (MOCK MODE)');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('Content:', htmlContent);
+        console.log('=====================================================\n');
+        return { success: true, messageId: `mock-${Date.now()}` };
+      }
+
+      if (USE_SENDGRID) {
+        // Send via SendGrid API (recommended for production)
+        const msg = {
+          to: to,
+          from: SENDGRID_FROM_EMAIL,
+          subject: subject,
+          html: htmlContent,
+        };
+        
+        const response = await sgMail.send(msg);
+        
+        console.log('\n[EMAIL SENT] =====================================');
+        console.log('✅ Email sent via SendGrid API');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('Status:', response[0].statusCode);
+        console.log('Message ID:', response[0].headers['x-message-id']);
+        console.log('=====================================================\n');
+        
+        return { success: true, messageId: response[0].headers['x-message-id'] };
+      } else {
+        // Send via Gmail SMTP (fallback for local dev)
         const info = await emailTransporter.sendMail({
           from: `"TaskFlow System" <${GMAIL_USER}>`,
           to: to,
@@ -63,25 +104,19 @@ const emailService = {
         });
         
         console.log('\n[EMAIL SENT] =====================================');
-        console.log('✅ Real email sent successfully!');
+        console.log('✅ Email sent via Gmail SMTP');
         console.log('To:', to);
         console.log('Subject:', subject);
         console.log('Message ID:', info.messageId);
         console.log('=====================================================\n');
         
         return { success: true, messageId: info.messageId };
-      } else {
-        // Mock mode - log to console only
-        console.log('\n[EMAIL SENT] ===================================== (MOCK MODE)');
-        console.log('To:', to);
-        console.log('Subject:', subject);
-        console.log('Content:', htmlContent);
-        console.log('=====================================================\n');
-        
-        return { success: true, messageId: `mock-${Date.now()}` };
       }
     } catch (error) {
       console.error('[EMAIL ERROR]', error.message);
+      if (error.response) {
+        console.error('[EMAIL ERROR] Response:', error.response.body);
+      }
       return { success: false, error: error.message };
     }
   },
@@ -967,21 +1002,30 @@ const server = app.listen(PORT, HOST, () => {
   
   // Email configuration check on startup
   console.log('\n📧 Email Configuration Status:');
-  if (process.env.USE_REAL_EMAIL === 'true') {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-      console.error('   ❌ ERROR: Gmail credentials not configured!');
-      console.error('   Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables');
+  if (process.env.USE_REAL_EMAIL === 'true' || process.env.USE_REAL_MAIL === 'true') {
+    if (USE_SENDGRID) {
+      console.log('   ✅ SendGrid API mode ENABLED');
+      console.log('   📬 From email:', SENDGRID_FROM_EMAIL);
+      console.log('   🔐 API key: configured (' + SENDGRID_API_KEY.substring(0, 10) + '...)');
+      console.log('   ✨ This will work on Render production!');
+    } else if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.error('   ❌ ERROR: Email credentials not configured!');
+      console.error('   For SendGrid: Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL');
+      console.error('   For Gmail: Set GMAIL_USER and GMAIL_APP_PASSWORD');
       console.error('   Current status:');
+      console.error('     - SENDGRID_API_KEY:', SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+      console.error('     - SENDGRID_FROM_EMAIL:', SENDGRID_FROM_EMAIL || 'NOT SET');
       console.error('     - GMAIL_USER:', process.env.GMAIL_USER || 'NOT SET');
       console.error('     - GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? 'SET' : 'NOT SET');
     } else {
-      console.log('   ✅ Real email mode ENABLED');
+      console.log('   ✅ Gmail SMTP mode ENABLED');
       console.log('   📬 Using Gmail account:', process.env.GMAIL_USER);
       console.log('   🔐 App password: configured (' + process.env.GMAIL_APP_PASSWORD.length + ' chars)');
+      console.log('   ⚠️  Note: Gmail SMTP may not work on Render free tier');
     }
   } else {
     console.log('   ⚠️  MOCK MODE - Emails will only be logged to console');
-    console.log('   Set USE_REAL_EMAIL=true to enable real emails');
+    console.log('   Set USE_REAL_EMAIL=true or USE_REAL_MAIL=true to enable real emails');
   }
   console.log('');
   

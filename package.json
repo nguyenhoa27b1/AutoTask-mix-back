@@ -12,6 +12,7 @@
     "render-build": "npm install && npm run build"
   },
   "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
