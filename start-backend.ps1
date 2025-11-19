@@ -12,8 +12,12 @@ Write-Host "🚀 Starting Backend Server..."
 Write-Host "Server will run on http://localhost:4000"
 Write-Host ""
 
-cd d:\web\AutoTask
-Start-Process -FilePath "node" -ArgumentList "server-wrapper.cjs" -NoNewWindow
+# Change to the repository directory and start Node with that working directory.
+# Use the actual workspace path so the script works when invoked from anywhere.
+$scriptDir = 'd:\web\AutoTask mix back'
+if (Test-Path $scriptDir) { Set-Location $scriptDir } else { Write-Host "⚠️  Expected directory $scriptDir not found" }
+
+Start-Process -FilePath "node" -ArgumentList "server-wrapper.cjs" -WorkingDirectory $scriptDir -NoNewWindow
 
 Start-Sleep -Seconds 2
 

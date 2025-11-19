@@ -2,13 +2,155 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const bodyParser = require('body-parser');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
 
 // We'll accept uploads into memory first, then persist to disk in the submit handler.
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+// --- Email Configuration ---
+// Create a test/mock email transporter (for development, logs to console instead of sending real emails)
+const emailTransporter = nodemailer.createTransport({
+  host: 'smtp.example.com', // Mock SMTP - will log to console instead
+  port: 587,
+  secure: false,
+  auth: {
+    user: 'mock@example.com',
+    pass: 'mockpassword'
+  },
+  // For development: use jsonTransport to avoid actual email sending
+  jsonTransport: true
+});
+
+// Email helper functions
+const emailService = {
+  // Format date for email display
+  formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('vi-VN', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  },
+
+  // Send email notification (mock - logs to console)
+  async sendEmail(to, subject, htmlContent) {
+    try {
+      console.log('\n[EMAIL SENT] =====================================');
+      console.log('To:', to);
+      console.log('Subject:', subject);
+      console.log('Content:', htmlContent);
+      console.log('=====================================================\n');
+      
+      // In production, you would actually send the email:
+      // await emailTransporter.sendMail({ from: '"TaskFlow System" <noreply@taskflow.com>', to, subject, html: htmlContent });
+      
+      return { success: true, messageId: `mock-${Date.now()}` };
+    } catch (error) {
+      console.error('[EMAIL ERROR]', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // A. Immediate Notifications
+
+  // Task được giao mới
+  async notifyTaskAssigned(task, assignee, assigner) {
+    const subject = `[Giao Việc Mới] Task ${task.title} đã được giao cho bạn`;
+    const html = `
+      <h3>Chào ${assignee.name || assignee.email},</h3>
+      <p>Bạn vừa được giao một công việc mới: <strong>${task.title}</strong>.</p>
+      <ul>
+        <li><strong>Thời hạn:</strong> ${this.formatDate(task.deadline)}</li>
+        <li><strong>Được giao bởi:</strong> ${assigner.name || assigner.email}</li>
+        <li><strong>Mô tả:</strong> ${task.description || 'Không có mô tả'}</li>
+      </ul>
+      <p>Vui lòng kiểm tra và bắt đầu thực hiện.</p>
+      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+    `;
+    await this.sendEmail(assignee.email, subject, html);
+  },
+
+  // Task đã hoàn thành
+  async notifyTaskCompleted(task, submitter, admins) {
+    const subject = `[Hoàn thành] Task ${task.title} đã được nộp`;
+    const html = `
+      <h3>Chào Admin,</h3>
+      <p>Task <strong>${task.title}</strong> đã được ${submitter.name || submitter.email} hoàn thành và nộp vào hệ thống.</p>
+      <ul>
+        <li><strong>Thời điểm nộp:</strong> ${this.formatDate(task.date_submit)}</li>
+        <li><strong>Điểm số:</strong> ${task.score !== null ? task.score : 'Chưa chấm'}</li>
+      </ul>
+      <p>Vui lòng xem xét và chấm điểm.</p>
+      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+    `;
+    
+    // Send to all admins
+    for (const admin of admins) {
+      await this.sendEmail(admin.email, subject, html);
+    }
+  },
+
+  // B. Scheduled Notifications
+
+  // Sắp tới deadline (1 ngày trước)
+  async notifyDeadlineApproaching(task, assignee) {
+    const subject = `[NHẮC NHỞ KHẨN] Task ${task.title} sẽ hết hạn trong 24 giờ`;
+    const html = `
+      <h3>Chào ${assignee.name || assignee.email},</h3>
+      <p>Task <strong>${task.title}</strong> của bạn sắp hết hạn.</p>
+      <ul>
+        <li><strong>Thời hạn:</strong> ${this.formatDate(task.deadline)} (Còn chưa đầy 1 ngày)</li>
+      </ul>
+      <p style="color: orange; font-weight: bold;">Vui lòng hoàn thành Task trước thời gian này.</p>
+      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+    `;
+    await this.sendEmail(assignee.email, subject, html);
+  },
+
+  // Quá hạn deadline (1 ngày sau)
+  async notifyDeadlineOverdue(task, assignee) {
+    const subject = `[QUÁ HẠN] Task ${task.title} đã hết hạn 1 ngày`;
+    const html = `
+      <h3>Chào ${assignee.name || assignee.email},</h3>
+      <p>Task <strong>${task.title}</strong> đã quá thời hạn nộp <strong>1 ngày</strong>.</p>
+      <ul>
+        <li><strong>Thời hạn đã qua:</strong> ${this.formatDate(task.deadline)}</li>
+      </ul>
+      <p style="color: red; font-weight: bold;">Task này đã bị đánh dấu là quá hạn.</p>
+      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+    `;
+    await this.sendEmail(assignee.email, subject, html);
+  }
+};
+
+// Restrict CORS to the frontend origins used in development (ports 3000 and 3001).
+// Using an explicit list helps avoid intermittent CORS issues when testing locally.
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+];
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., curl, native apps)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 // Parse JSON and urlencoded bodies (support both modern fetch and form posts)
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -301,6 +443,16 @@ app.post('/api/tasks', upload.single('file'), async (req, res) => {
     status: data.status || 'Pending',
   };
   mockTasks.push(newTask);
+
+  // Send email notification to assignee
+  const assignee = mockUsers.find(u => u.user_id === newTask.assignee_id);
+  const assigner = mockUsers.find(u => u.user_id === newTask.assigner_id) || loggedInUser;
+  if (assignee && assigner) {
+    emailService.notifyTaskAssigned(newTask, assignee, assigner).catch(err => 
+      console.error('[EMAIL] Failed to send task assignment notification:', err.message)
+    );
+  }
+
   return res.json(newTask);
 });
 
@@ -344,6 +496,15 @@ app.post('/api/tasks/:id/submit', upload.single('file'), async (req, res) => {
     task.date_submit = new Date().toISOString();
     task.score = calcScoreForSubmission(task, fileMeta);
     task.status = 'Completed';
+
+    // Send email notification to admins
+    const submitter = mockUsers.find(u => u.user_id === (loggedInUser ? loggedInUser.user_id : task.assignee_id));
+    const admins = mockUsers.filter(u => u.role === Role.ADMIN);
+    if (submitter && admins.length > 0) {
+      emailService.notifyTaskCompleted(task, submitter, admins).catch(err => 
+        console.error('[EMAIL] Failed to send task completion notification:', err.message)
+      );
+    }
 
     return res.json({ task, file: { id_file: fileMeta.id_file, name: fileMeta.name, url: fileMeta.url } });
   } catch (e) {
@@ -403,6 +564,47 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+// --- Scheduled Email Notifications with Cron Jobs ---
+// Check for deadline reminders every hour
+cron.schedule('0 * * * *', () => {
+  console.log('[CRON] Running deadline check...');
+  const now = new Date();
+  
+  mockTasks.forEach(task => {
+    // Skip completed tasks
+    if (task.status === 'Completed' || !task.deadline) return;
+    
+    const deadline = new Date(task.deadline);
+    const timeDiff = deadline.getTime() - now.getTime();
+    const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+    
+    // 1 day before deadline (23-25 hours remaining)
+    if (daysDiff > 0.95 && daysDiff < 1.05 && !task.reminderSent) {
+      const assignee = mockUsers.find(u => u.user_id === task.assignee_id);
+      if (assignee) {
+        emailService.notifyDeadlineApproaching(task, assignee).catch(err =>
+          console.error('[EMAIL] Failed to send deadline approaching notification:', err.message)
+        );
+        task.reminderSent = true; // Mark to avoid duplicate reminders
+      }
+    }
+    
+    // 1 day after deadline (23-25 hours overdue)
+    if (daysDiff < -0.95 && daysDiff > -1.05 && !task.overdueNotificationSent) {
+      const assignee = mockUsers.find(u => u.user_id === task.assignee_id);
+      if (assignee) {
+        emailService.notifyDeadlineOverdue(task, assignee).catch(err =>
+          console.error('[EMAIL] Failed to send deadline overdue notification:', err.message)
+        );
+        task.overdueNotificationSent = true; // Mark to avoid duplicate reminders
+      }
+    }
+  });
+});
+
+console.log('[EMAIL] Email notification system initialized');
+console.log('[CRON] Deadline reminder scheduler started (runs every hour)');
 
 // Bind explicitly to IPv4 loopback to avoid IPv6-only binding issues on some Windows setups
 const HOST = '127.0.0.1';

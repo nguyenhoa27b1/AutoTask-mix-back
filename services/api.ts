@@ -9,15 +9,62 @@ async function fetchFromBackend<T>(
     options?: RequestInit
 ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
-        headers: {
-            // default JSON content-type; callers can override
-            'Content-Type': 'application/json',
-            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-            ...options?.headers,
-        },
-        ...options,
-    });
+    
+    // Mask sensitive fields for logging (e.g., password)
+    const maskSensitive = (body: any) => {
+        try {
+            if (!body) return body;
+            if (typeof body === 'string') {
+                const parsed = JSON.parse(body);
+                if (parsed && typeof parsed === 'object' && 'password' in parsed) {
+                    return { ...parsed, password: '***' };
+                }
+                return parsed;
+            }
+            if (body instanceof FormData) return '[FormData]';
+            if (typeof body === 'object') {
+                if ('password' in body) return { ...body, password: '***' };
+                return body;
+            }
+            return body;
+        } catch (e) {
+            return '[unserializable]';
+        }
+    };
+
+    // Log outgoing request in dev only
+    try {
+        const safeBody = maskSensitive(options?.body as any);
+        // eslint-disable-next-line no-console
+        console.debug('[API] ->', options?.method || 'GET', url, safeBody);
+    } catch (e) {
+        // ignore logging errors
+    }
+
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+                ...options?.headers,
+            },
+            ...options,
+        });
+    } catch (networkErr: any) {
+        // eslint-disable-next-line no-console
+        console.error('[API] network error when fetching', url, networkErr?.message || networkErr);
+        throw new Error(`Network error: ${networkErr?.message || 'Failed to fetch'}`);
+    }
+
+    // Log response body (clone so we can still consume it later)
+    try {
+        const text = await response.clone().text().catch(() => null);
+        // eslint-disable-next-line no-console
+        console.debug('[API] <-', response.status, url, text ? text.slice(0, 2000) : text);
+    } catch (e) {
+        // ignore logging errors
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: response.statusText }));
