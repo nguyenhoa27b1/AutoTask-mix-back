@@ -215,6 +215,7 @@ const mockUsers = [
     role: Role.ADMIN,
     name: 'Admin User',
     picture: null,
+    isWhitelisted: false, // Non-Gmail users don't need whitelist
   },
   {
     user_id: 2,
@@ -223,6 +224,7 @@ const mockUsers = [
     role: Role.USER,
     name: 'Normal User',
     picture: null,
+    isWhitelisted: false, // Non-Gmail users don't need whitelist
   },
 ];
 
@@ -248,8 +250,8 @@ const getDomainFromEmail = (email) => {
 
 function sanitizeUser(user) {
   const { passwordHash, ...u } = user;
-  // expose isAdmin boolean for frontend convenience
-  return { ...u, isAdmin: (u.role === Role.ADMIN) };
+  // expose isAdmin boolean and isWhitelisted for frontend convenience
+  return { ...u, isAdmin: (u.role === Role.ADMIN), isWhitelisted: u.isWhitelisted || false };
 }
 
 // --- Domain-Based Privacy Control Middleware ---
@@ -406,6 +408,15 @@ app.post('/api/login', async (req, res) => {
   try { console.log('[LOGIN] raw body:', JSON.stringify(req.body)); } catch (e) { console.log('[LOGIN] raw body: (unstringifiable)'); }
   const { email, password } = req.body || {};
   console.log('[LOGIN] attempt:', { email, password });
+  
+  // Block Gmail users from password login FIRST - they must use Google OAuth
+  const domain = getDomainFromEmail(email);
+  if (domain === 'gmail.com') {
+    console.warn('🚫 [CONDITIONAL LOGIN] Gmail user attempted password login:', email);
+    return res.status(403).json({ error: 'Gmail users must login via Google OAuth only.' });
+  }
+  
+  // Only check password for non-Gmail users
   const user = mockUsers.find((u) => u.email === email && (u.passwordHash === password || password === 'test'));
   if (!user) {
     console.warn('[LOGIN] failed for:', email);
@@ -422,23 +433,55 @@ app.post('/api/login/google', async (req, res) => {
   await sleep(200);
   const profile = req.body;
   if (!profile || !profile.email) return res.status(400).json({ error: 'Invalid profile' });
+  
+  const domain = getDomainFromEmail(profile.email);
   let user = mockUsers.find((u) => u.email === profile.email);
-  if (!user) {
-    // Auto-assign admin role for nguyenhoa27b1@gmail.com
-    const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
-    user = {
-      user_id: nextUserId++,
-      email: profile.email,
-      passwordHash: '',
-      role: isAdminEmail ? Role.ADMIN : Role.USER,
-      name: profile.name || profile.given_name || profile.email.split('@')[0],
-      picture: profile.picture || null,
-    };
-    mockUsers.push(user);
-    if (isAdminEmail) {
-      console.log('🔑 [ADMIN ACCESS] Auto-granted admin role to:', profile.email);
+  
+  // Whitelist check for Gmail users
+  if (domain === 'gmail.com') {
+    if (!user) {
+      // Gmail user not in database - blocked
+      console.warn('🚫 [WHITELIST] Gmail user not whitelisted:', profile.email);
+      return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to be added to whitelist.' });
+    }
+    
+    if (!user.isWhitelisted) {
+      // Gmail user exists but not whitelisted - blocked
+      console.warn('🚫 [WHITELIST] Gmail user exists but not whitelisted:', profile.email);
+      return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to enable whitelist.' });
+    }
+    
+    // Valid whitelisted Gmail user - auto-update name from Google profile
+    const oldName = user.name;
+    user.name = profile.name || profile.given_name || user.name;
+    user.picture = profile.picture || user.picture;
+    
+    if (oldName !== user.name) {
+      console.log('✅ [AUTO-UPDATE NAME] Updated:', profile.email, '|', oldName, '→', user.name);
+    }
+    
+    console.log('✅ [WHITELIST] Gmail user login approved:', profile.email);
+  } else {
+    // Non-Gmail users: auto-create if not exists
+    if (!user) {
+      // Auto-assign admin role for nguyenhoa27b1@gmail.com
+      const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
+      user = {
+        user_id: nextUserId++,
+        email: profile.email,
+        passwordHash: '',
+        role: isAdminEmail ? Role.ADMIN : Role.USER,
+        name: profile.name || profile.given_name || profile.email.split('@')[0],
+        picture: profile.picture || null,
+        isWhitelisted: false, // Non-Gmail users don't need whitelist
+      };
+      mockUsers.push(user);
+      if (isAdminEmail) {
+        console.log('🔑 [ADMIN ACCESS] Auto-granted admin role to:', profile.email);
+      }
     }
   }
+  
   authToken = `token-${Date.now()}`;
   loggedInUser = user;
   return res.json(sanitizeUser(user));
@@ -448,6 +491,10 @@ app.post('/api/register', async (req, res) => {
   await sleep(200);
   const { email, name, password } = req.body;
   if (mockUsers.find((u) => u.email === email)) return res.status(400).json({ error: 'User exists' });
+  
+  const domain = getDomainFromEmail(email);
+  const isGmail = domain === 'gmail.com';
+  
   const user = {
     user_id: nextUserId++,
     email,
@@ -455,6 +502,7 @@ app.post('/api/register', async (req, res) => {
     role: Role.USER,
     name,
     picture: null,
+    isWhitelisted: isGmail ? false : false, // Gmail users registered directly are NOT whitelisted by default
   };
   mockUsers.push(user);
   return res.json(sanitizeUser(user));
@@ -473,12 +521,28 @@ app.get('/api/users', filterByDomain('users'), async (req, res) => {
 });
 
 app.post('/api/users', async (req, res) => {
-  await sleep(150);
-  const { email, role } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
+  await sleep(200);
+  const { email, name, role, password } = req.body;
   if (mockUsers.find((u) => u.email === email)) return res.status(400).json({ error: 'User exists' });
-  const user = { user_id: nextUserId++, email, passwordHash: '', role: role || Role.USER, name: null, picture: null };
+  
+  const domain = getDomainFromEmail(email);
+  const isGmail = domain === 'gmail.com';
+  
+  const user = {
+    user_id: nextUserId++,
+    email,
+    passwordHash: password || '',
+    role: role || Role.USER,
+    name,
+    picture: null,
+    isWhitelisted: isGmail ? true : false, // Auto-whitelist Gmail users added by admin
+  };
   mockUsers.push(user);
+  
+  if (isGmail) {
+    console.log('✅ [WHITELIST] Gmail user added and whitelisted:', email);
+  }
+  
   return res.json(sanitizeUser(user));
 });
 
