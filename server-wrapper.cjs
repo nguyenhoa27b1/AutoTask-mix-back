@@ -245,6 +245,62 @@ function sanitizeUser(user) {
   return { ...u, isAdmin: (u.role === Role.ADMIN) };
 }
 
+// --- Interaction Guard Middleware ---
+// Prevents example.com users from interacting with @gmail.com users
+const checkGmailInteraction = (req, res, next) => {
+  // Only check if user is logged in
+  if (!loggedInUser) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const currentUserEmail = loggedInUser.email;
+  const isExampleComUser = currentUserEmail.endsWith('@example.com');
+
+  // Only apply restriction for @example.com users
+  if (!isExampleComUser) {
+    return next();
+  }
+
+  // Check if request involves @gmail.com users
+  const { assignee_id, assigner_id, userId } = req.body || {};
+  const taskId = req.params?.id;
+
+  // Check assignee_id in request body
+  if (assignee_id) {
+    const assignee = mockUsers.find(u => u.user_id === parseInt(assignee_id));
+    if (assignee && assignee.email.endsWith('@gmail.com')) {
+      console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to assign task to ${assignee.email}`);
+      return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+    }
+  }
+
+  // Check task owner/assignee when updating existing task
+  if (taskId) {
+    const task = mockTasks.find(t => t.task_id === parseInt(taskId));
+    if (task) {
+      const taskAssignee = mockUsers.find(u => u.user_id === task.assignee_id);
+      const taskAssigner = mockUsers.find(u => u.user_id === task.assigner_id);
+      
+      if ((taskAssignee && taskAssignee.email.endsWith('@gmail.com')) ||
+          (taskAssigner && taskAssigner.email.endsWith('@gmail.com'))) {
+        console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to modify task involving @gmail.com user`);
+        return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+      }
+    }
+  }
+
+  // Check userId in request (for user management)
+  if (userId) {
+    const targetUser = mockUsers.find(u => u.user_id === parseInt(userId));
+    if (targetUser && targetUser.email.endsWith('@gmail.com')) {
+      console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to modify @gmail.com user`);
+      return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+    }
+  }
+
+  next();
+};
+
 function calcScoreForSubmission(task, file) {
   const submissionDate = new Date();
   // If task.deadline was provided as a YYYY-MM-DD string, parse it as local date
@@ -305,15 +361,20 @@ app.post('/api/login/google', async (req, res) => {
   if (!profile || !profile.email) return res.status(400).json({ error: 'Invalid profile' });
   let user = mockUsers.find((u) => u.email === profile.email);
   if (!user) {
+    // Auto-assign admin role for nguyenhoa27b1@gmail.com
+    const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
     user = {
       user_id: nextUserId++,
       email: profile.email,
       passwordHash: '',
-      role: Role.USER,
+      role: isAdminEmail ? Role.ADMIN : Role.USER,
       name: profile.name || profile.given_name || profile.email.split('@')[0],
       picture: profile.picture || null,
     };
     mockUsers.push(user);
+    if (isAdminEmail) {
+      console.log('🔑 [ADMIN ACCESS] Auto-granted admin role to:', profile.email);
+    }
   }
   authToken = `token-${Date.now()}`;
   loggedInUser = user;
@@ -383,7 +444,7 @@ app.get('/api/tasks', async (req, res) => {
   return res.json(mockTasks);
 });
 
-app.post('/api/tasks', upload.single('file'), async (req, res) => {
+app.post('/api/tasks', checkGmailInteraction, upload.single('file'), async (req, res) => {
   await sleep(150);
   const data = req.body;
   const file = req.file;
@@ -505,7 +566,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/tasks/:id/submit', upload.single('file'), async (req, res) => {
+app.post('/api/tasks/:id/submit', checkGmailInteraction, upload.single('file'), async (req, res) => {
   await sleep(200);
   const id = Number(req.params.id);
   const task = mockTasks.find((t) => t.id_task === id);
