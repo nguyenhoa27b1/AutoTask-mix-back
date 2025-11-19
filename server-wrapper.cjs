@@ -253,8 +253,14 @@ const getDomainFromEmail = (email) => {
 
 function sanitizeUser(user) {
   const { passwordHash, ...u } = user;
-  // expose isAdmin boolean and isWhitelisted for frontend convenience
-  return { ...u, isAdmin: (u.role === Role.ADMIN), isWhitelisted: u.isWhitelisted || false };
+  // Ensure name and picture are always strings (never null/undefined)
+  return {
+    ...u,
+    name: u.name || u.email?.split('@')[0] || 'User',
+    picture: u.picture || '',
+    isAdmin: (u.role === Role.ADMIN),
+    isWhitelisted: u.isWhitelisted || false
+  };
 }
 
 // Authentication middleware - validate token and set loggedInUser
@@ -480,7 +486,7 @@ app.post('/api/login/google', async (req, res) => {
           passwordHash: '',
           role: Role.ADMIN,
           name: profile.name || profile.given_name || profile.email.split('@')[0],
-          picture: profile.picture || null,
+          picture: profile.picture || '',
           isWhitelisted: true, // Auto-whitelist admin
         };
         mockUsers.push(user);
@@ -500,8 +506,8 @@ app.post('/api/login/google', async (req, res) => {
       
       // Valid user - auto-update name from Google profile
       const oldName = user.name;
-      user.name = profile.name || profile.given_name || user.name;
-      user.picture = profile.picture || user.picture;
+      user.name = profile.name || profile.given_name || user.name || user.email.split('@')[0];
+      user.picture = profile.picture || user.picture || '';
       
       // Ensure admin email always has admin role and is whitelisted
       if (isAdminEmail) {
@@ -524,10 +530,14 @@ app.post('/api/login/google', async (req, res) => {
         passwordHash: '',
         role: Role.USER,
         name: profile.name || profile.given_name || profile.email.split('@')[0],
-        picture: profile.picture || null,
+        picture: profile.picture || '',
         isWhitelisted: false, // Non-Gmail users don't need whitelist
       };
       mockUsers.push(user);
+    } else {
+      // User exists - ensure name and picture are strings
+      user.name = profile.name || profile.given_name || user.name || user.email.split('@')[0];
+      user.picture = profile.picture || user.picture || '';
     }
   }
   
@@ -537,7 +547,16 @@ app.post('/api/login/google', async (req, res) => {
   // Store token in session map
   activeSessions.set(authToken, { user, timestamp: Date.now() });
   
-  return res.json({ user: sanitizeUser(user), token: authToken });
+  // Sanitize and validate user object before sending to frontend
+  const sanitizedUser = sanitizeUser(user);
+  
+  console.log('✅ [GOOGLE LOGIN SUCCESS] User:', sanitizedUser.email);
+  console.log('📋 [USER OBJECT] Keys:', Object.keys(sanitizedUser));
+  console.log('📋 [USER OBJECT] name:', sanitizedUser.name, '(type:', typeof sanitizedUser.name + ')');
+  console.log('📋 [USER OBJECT] picture:', sanitizedUser.picture, '(type:', typeof sanitizedUser.picture + ')');
+  console.log('📋 [USER OBJECT] email:', sanitizedUser.email, '(type:', typeof sanitizedUser.email + ')');
+  
+  return res.json({ user: sanitizedUser, token: authToken });
 });
 
 app.post('/api/register', async (req, res) => {
