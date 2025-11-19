@@ -1,7 +1,9 @@
 import { User, Task, Role, AppFile, Priority, GoogleProfile } from '../types';
 
-// Backend API base URL (use IPv4 loopback to avoid IPv6/localhost resolution issues on some setups)
-const API_BASE_URL = 'http://127.0.0.1:4000/api';
+// Backend API base URL - Auto-detect for network access
+// In production, set VITE_API_BASE_URL environment variable
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 
+    `http://${window.location.hostname}:4000/api`;
 
 // Helper to make HTTP requests
 async function fetchFromBackend<T>(

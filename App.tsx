@@ -66,21 +66,32 @@ const App: React.FC = () => {
     }, []);
 
     const attemptLogin = useCallback(async (userPromise: Promise<User | null>) => {
+        console.log('🚀 [APP] attemptLogin - waiting for user promise...');
         try {
             const user = await userPromise;
+            console.log('👤 [APP] User received from api.login:', user);
+            
             if (user) {
+                console.log('✓ [APP] User is valid, setting current user...');
                 setCurrentUser(user);
+                console.log('📊 [APP] Fetching app data...');
                 await fetchAppData();
+                console.log('✅ [APP] Login complete - returning true');
                 return true;
             }
+            console.warn('⚠️ [APP] User is null/undefined - returning false');
             return false;
         } catch (error) {
-            console.error("Login failed", error);
+            console.error("💥 [APP] Login failed with error:", error);
+            console.error("Error type:", typeof error);
+            console.error("Error stringified:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
             throw error; // Re-throw to be caught in the UI component
         }
     }, [fetchAppData]);
 
     const handleLogin = (email: string, password: string): Promise<boolean> => {
+        console.log('🔑 [APP] handleLogin called with email:', email);
+        console.log('📍 [APP] About to call api.login...');
         return attemptLogin(api.login(email, password));
     };
 
