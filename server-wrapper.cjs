@@ -239,52 +239,62 @@ let loggedInUser = null;
 // Helpers
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
+// Extract domain from email (e.g., "user@example.com" → "example.com")
+const getDomainFromEmail = (email) => {
+  if (!email || typeof email !== 'string') return null;
+  const parts = email.split('@');
+  return parts.length === 2 ? parts[1].toLowerCase() : null;
+};
+
 function sanitizeUser(user) {
   const { passwordHash, ...u } = user;
   // expose isAdmin boolean for frontend convenience
   return { ...u, isAdmin: (u.role === Role.ADMIN) };
 }
 
-// --- Interaction Guard Middleware ---
-// Prevents example.com users from interacting with @gmail.com users
-const checkGmailInteraction = (req, res, next) => {
+// --- Domain-Based Privacy Control Middleware ---
+// Enforces domain isolation: users can only interact with same-domain users/tasks
+const checkDomainIsolation = (req, res, next) => {
   // Only check if user is logged in
   if (!loggedInUser) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const currentUserEmail = loggedInUser.email;
-  const isExampleComUser = currentUserEmail.endsWith('@example.com');
-
-  // Only apply restriction for @example.com users
-  if (!isExampleComUser) {
-    return next();
+  const currentUserDomain = getDomainFromEmail(loggedInUser.email);
+  if (!currentUserDomain) {
+    return res.status(400).json({ error: 'Invalid user email domain' });
   }
 
-  // Check if request involves @gmail.com users
-  const { assignee_id, assigner_id, userId } = req.body || {};
-  const taskId = req.params?.id;
+  // Check if request involves users from different domains
+  const { assignee_id, assigner_id, userId, id_task } = req.body || {};
+  const taskId = req.params?.id || id_task;
 
-  // Check assignee_id in request body
+  // Check assignee_id in request body (creating/updating task)
   if (assignee_id) {
     const assignee = mockUsers.find(u => u.user_id === parseInt(assignee_id));
-    if (assignee && assignee.email.endsWith('@gmail.com')) {
-      console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to assign task to ${assignee.email}`);
-      return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+    if (assignee) {
+      const assigneeDomain = getDomainFromEmail(assignee.email);
+      if (assigneeDomain !== currentUserDomain) {
+        console.warn(`🚫 [DOMAIN ISOLATION] ${loggedInUser.email} attempted to assign task to ${assignee.email} (different domain)`);
+        return res.status(403).json({ error: 'Cross-domain interaction denied.' });
+      }
     }
   }
 
   // Check task owner/assignee when updating existing task
   if (taskId) {
-    const task = mockTasks.find(t => t.task_id === parseInt(taskId));
+    const task = mockTasks.find(t => t.task_id === parseInt(taskId) || t.id_task === parseInt(taskId));
     if (task) {
       const taskAssignee = mockUsers.find(u => u.user_id === task.assignee_id);
       const taskAssigner = mockUsers.find(u => u.user_id === task.assigner_id);
       
-      if ((taskAssignee && taskAssignee.email.endsWith('@gmail.com')) ||
-          (taskAssigner && taskAssigner.email.endsWith('@gmail.com'))) {
-        console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to modify task involving @gmail.com user`);
-        return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+      const assigneeDomain = taskAssignee ? getDomainFromEmail(taskAssignee.email) : null;
+      const assignerDomain = taskAssigner ? getDomainFromEmail(taskAssigner.email) : null;
+      
+      if ((assigneeDomain && assigneeDomain !== currentUserDomain) ||
+          (assignerDomain && assignerDomain !== currentUserDomain)) {
+        console.warn(`🚫 [DOMAIN ISOLATION] ${loggedInUser.email} attempted to modify cross-domain task`);
+        return res.status(403).json({ error: 'Cross-domain interaction denied.' });
       }
     }
   }
@@ -292,13 +302,66 @@ const checkGmailInteraction = (req, res, next) => {
   // Check userId in request (for user management)
   if (userId) {
     const targetUser = mockUsers.find(u => u.user_id === parseInt(userId));
-    if (targetUser && targetUser.email.endsWith('@gmail.com')) {
-      console.warn(`🚫 [INTERACTION BLOCKED] ${currentUserEmail} attempted to modify @gmail.com user`);
-      return res.status(403).json({ error: 'Interaction denied for @gmail.com users.' });
+    if (targetUser) {
+      const targetDomain = getDomainFromEmail(targetUser.email);
+      if (targetDomain !== currentUserDomain) {
+        console.warn(`🚫 [DOMAIN ISOLATION] ${loggedInUser.email} attempted to modify user from different domain`);
+        return res.status(403).json({ error: 'Cross-domain interaction denied.' });
+      }
     }
   }
 
   next();
+};
+
+// Middleware to filter lists by current user's domain
+const filterByDomain = (dataType) => {
+  return (req, res, next) => {
+    // Store original json function
+    const originalJson = res.json.bind(res);
+    
+    // Override res.json to filter data
+    res.json = (data) => {
+      if (!loggedInUser) {
+        return originalJson(data);
+      }
+
+      const currentUserDomain = getDomainFromEmail(loggedInUser.email);
+      if (!currentUserDomain) {
+        return originalJson(data);
+      }
+
+      // Filter array data by domain
+      if (Array.isArray(data)) {
+        const filtered = data.filter(item => {
+          let itemDomain = null;
+          
+          if (dataType === 'users' && item.email) {
+            itemDomain = getDomainFromEmail(item.email);
+          } else if (dataType === 'tasks') {
+            // For tasks, check both assignee and assigner domains
+            const assignee = mockUsers.find(u => u.user_id === item.assignee_id);
+            const assigner = mockUsers.find(u => u.user_id === item.assigner_id);
+            const assigneeDomain = assignee ? getDomainFromEmail(assignee.email) : null;
+            const assignerDomain = assigner ? getDomainFromEmail(assigner.email) : null;
+            
+            // Include task if either assignee or assigner matches current user's domain
+            return (assigneeDomain === currentUserDomain) || (assignerDomain === currentUserDomain);
+          }
+          
+          return itemDomain === currentUserDomain;
+        });
+        
+        console.log(`🔒 [DOMAIN FILTER] ${loggedInUser.email}: Filtered ${dataType} from ${data.length} to ${filtered.length} items`);
+        return originalJson(filtered);
+      }
+      
+      // If not array, return as-is
+      return originalJson(data);
+    };
+    
+    next();
+  };
 };
 
 function calcScoreForSubmission(task, file) {
@@ -404,7 +467,7 @@ app.post('/api/logout', (req, res) => {
 });
 
 // --- Users ---
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', filterByDomain('users'), async (req, res) => {
   await sleep(100);
   return res.json(mockUsers.map(sanitizeUser));
 });
@@ -439,12 +502,12 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // --- Tasks ---
-app.get('/api/tasks', async (req, res) => {
+app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   await sleep(100);
   return res.json(mockTasks);
 });
 
-app.post('/api/tasks', checkGmailInteraction, upload.single('file'), async (req, res) => {
+app.post('/api/tasks', checkDomainIsolation, upload.single('file'), async (req, res) => {
   await sleep(150);
   const data = req.body;
   const file = req.file;
@@ -566,7 +629,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/tasks/:id/submit', checkGmailInteraction, upload.single('file'), async (req, res) => {
+app.post('/api/tasks/:id/submit', checkDomainIsolation, upload.single('file'), async (req, res) => {
   await sleep(200);
   const id = Number(req.params.id);
   const task = mockTasks.find((t) => t.id_task === id);
