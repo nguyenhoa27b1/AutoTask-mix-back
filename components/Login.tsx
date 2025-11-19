@@ -18,18 +18,38 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
   const VITE_GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
 
   const handleCredentialResponse = async (response: any) => {
+    console.log('═══════════════════════════════════════════');
+    console.log('🔵 [GOOGLE LOGIN] Credential response received');
+    console.log('🔵 Response object keys:', Object.keys(response));
+    console.log('🔵 Has credential:', !!response.credential);
+    console.log('═══════════════════════════════════════════');
+    
     setError('');
     setLoading(true);
+    
     try {
+        console.log('⏳ [GOOGLE LOGIN] Calling onGoogleLogin...');
         const success = await onGoogleLogin(response);
+        console.log('✅ [GOOGLE LOGIN] onGoogleLogin returned:', success);
+        
         if (!success) {
-            // This case might not be hit if onGoogleLogin throws an error on failure, but it's good for safety.
+            console.error('❌ [GOOGLE LOGIN] Login failed - success is false');
             setError("Google Sign-In failed. Your account may not be registered.");
+        } else {
+            console.log('🎉 [GOOGLE LOGIN] Login successful!');
         }
     } catch (err) {
+        console.error('💥 [GOOGLE LOGIN] Exception caught:', err);
+        console.error('Error details:', {
+            message: (err as Error).message,
+            name: (err as Error).name,
+            stack: (err as Error).stack
+        });
         setError((err as Error).message || "An unexpected error occurred during Google Sign-In.");
     } finally {
         setLoading(false);
+        console.log('🏁 [GOOGLE LOGIN] Process completed');
+        console.log('═══════════════════════════════════════════\n');
     }
   };
 
