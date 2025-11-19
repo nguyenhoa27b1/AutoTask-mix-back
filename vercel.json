@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server-wrapper.cjs",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server-wrapper.cjs"
+    }
+  ],
+  "env": {
+    "USE_REAL_EMAIL": "false",
+    "HOST": "0.0.0.0",
+    "PORT": "4000"
+  }
+}
