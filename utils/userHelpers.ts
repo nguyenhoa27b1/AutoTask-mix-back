@@ -1,7 +1,8 @@
 import { User } from '../types';
 
 export const getUserDisplayName = (user: User): string => {
-  return user.name || user.email.split('@')[0];
+  // Ensure safe access to email and name properties
+  return user?.name || user?.email?.split('@')[0] || 'User';
 };
 
 export const getUserInitials = (user: User): string => {
