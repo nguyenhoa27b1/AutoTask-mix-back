@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server.cjs",
-    "start": "node server-wrapper.cjs"
+    "start": "node server-wrapper.cjs",
+    "render-build": "npm install && npm run build"
   },
   "dependencies": {
     "body-parser": "^2.2.0",
