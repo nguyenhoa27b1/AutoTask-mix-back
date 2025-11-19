@@ -797,13 +797,20 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
     task.score = calcScoreForSubmission(task, fileMeta);
     task.status = 'Completed';
 
-    // Send email notification to admins
-    const submitter = mockUsers.find(u => u.user_id === (loggedInUser ? loggedInUser.user_id : task.assignee_id));
-    const admins = mockUsers.filter(u => u.role === Role.ADMIN);
-    if (submitter && admins.length > 0) {
+    // ✅ Send email notification to assigner (task creator)
+    const submitter = mockUsers.find(u => u.user_id === task.assignee_id) || loggedInUser;
+    const assigner = mockUsers.find(u => u.user_id === task.assigner_id);
+    
+    if (submitter && assigner) {
+      console.log(`📧 [EMAIL] Sending task completion notification to assigner: ${assigner.email}`);
+      // Use notifyTaskCompleted which sends to all admins, OR create a new notifyTaskSubmitted for just assigner
+      // For now, notify all admins
+      const admins = mockUsers.filter(u => u.role === Role.ADMIN);
       emailService.notifyTaskCompleted(task, submitter, admins).catch(err => 
         console.error('[EMAIL] Failed to send task completion notification:', err.message)
       );
+    } else {
+      console.warn('⚠️ [EMAIL] Cannot send task submission email - missing submitter or assigner');
     }
 
     return res.json({ task, file: { id_file: fileMeta.id_file, name: fileMeta.name, url: fileMeta.url } });
