@@ -235,6 +235,9 @@ const mockFiles = [
   { id_file: 2, id_user: 2, name: 'final_marketing_copy.docx', url: `/files/2/download` },
 ];
 
+// Session storage - map token to user for multi-user support
+const activeSessions = new Map(); // token -> { user, timestamp }
+
 let authToken = null;
 let loggedInUser = null;
 
@@ -253,6 +256,28 @@ function sanitizeUser(user) {
   // expose isAdmin boolean and isWhitelisted for frontend convenience
   return { ...u, isAdmin: (u.role === Role.ADMIN), isWhitelisted: u.isWhitelisted || false };
 }
+
+// Authentication middleware - validate token and set loggedInUser
+const authenticate = (req, res, next) => {
+  const token = req.headers['authorization']?.replace('Bearer ', '');
+  
+  if (!token) {
+    // Fallback to global session for backward compatibility
+    if (loggedInUser) {
+      return next();
+    }
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const session = activeSessions.get(token);
+  if (!session) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  // Set loggedInUser from token session
+  loggedInUser = session.user;
+  next();
+};
 
 // --- Domain-Based Privacy Control Middleware ---
 // Enforces domain isolation: users can only interact with same-domain users/tasks
@@ -424,6 +449,10 @@ app.post('/api/login', async (req, res) => {
   }
   authToken = `token-${Date.now()}`;
   loggedInUser = user;
+  
+  // Store token in session map
+  activeSessions.set(authToken, { user, timestamp: Date.now() });
+  
   console.log('[LOGIN] success:', sanitizeUser(user));
   // Return user + token so frontend can include Authorization header when downloading
   return res.json({ user: sanitizeUser(user), token: authToken });
@@ -504,7 +533,11 @@ app.post('/api/login/google', async (req, res) => {
   
   authToken = `token-${Date.now()}`;
   loggedInUser = user;
-  return res.json(sanitizeUser(user));
+  
+  // Store token in session map
+  activeSessions.set(authToken, { user, timestamp: Date.now() });
+  
+  return res.json({ user: sanitizeUser(user), token: authToken });
 });
 
 app.post('/api/register', async (req, res) => {
@@ -591,7 +624,7 @@ app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   return res.json(mockTasks);
 });
 
-app.post('/api/tasks', checkDomainIsolation, upload.single('file'), async (req, res) => {
+app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file'), async (req, res) => {
   await sleep(150);
   const data = req.body;
   const file = req.file;
@@ -713,7 +746,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/tasks/:id/submit', checkDomainIsolation, upload.single('file'), async (req, res) => {
+app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.single('file'), async (req, res) => {
   await sleep(200);
   const id = Number(req.params.id);
   const task = mockTasks.find((t) => t.id_task === id);
