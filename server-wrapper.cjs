@@ -437,48 +437,68 @@ app.post('/api/login/google', async (req, res) => {
   const domain = getDomainFromEmail(profile.email);
   let user = mockUsers.find((u) => u.email === profile.email);
   
-  // Whitelist check for Gmail users
+  // Special case: Auto-grant admin + whitelist for nguyenhoa27b1@gmail.com
+  const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
+  
+  // Whitelist check for Gmail users (except admin email)
   if (domain === 'gmail.com') {
     if (!user) {
-      // Gmail user not in database - blocked
-      console.warn('🚫 [WHITELIST] Gmail user not whitelisted:', profile.email);
-      return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to be added to whitelist.' });
+      // Special case: Auto-create and whitelist admin email
+      if (isAdminEmail) {
+        user = {
+          user_id: nextUserId++,
+          email: profile.email,
+          passwordHash: '',
+          role: Role.ADMIN,
+          name: profile.name || profile.given_name || profile.email.split('@')[0],
+          picture: profile.picture || null,
+          isWhitelisted: true, // Auto-whitelist admin
+        };
+        mockUsers.push(user);
+        console.log('🔑 [ADMIN ACCESS] Auto-granted admin role and whitelisted:', profile.email);
+      } else {
+        // Regular Gmail user not in database - blocked
+        console.warn('🚫 [WHITELIST] Gmail user not whitelisted:', profile.email);
+        return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to be added to whitelist.' });
+      }
+    } else {
+      // User exists - check whitelist (except admin email)
+      if (!isAdminEmail && !user.isWhitelisted) {
+        // Gmail user exists but not whitelisted - blocked
+        console.warn('🚫 [WHITELIST] Gmail user exists but not whitelisted:', profile.email);
+        return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to enable whitelist.' });
+      }
+      
+      // Valid user - auto-update name from Google profile
+      const oldName = user.name;
+      user.name = profile.name || profile.given_name || user.name;
+      user.picture = profile.picture || user.picture;
+      
+      // Ensure admin email always has admin role and is whitelisted
+      if (isAdminEmail) {
+        user.role = Role.ADMIN;
+        user.isWhitelisted = true;
+      }
+      
+      if (oldName !== user.name) {
+        console.log('✅ [AUTO-UPDATE NAME] Updated:', profile.email, '|', oldName, '→', user.name);
+      }
+      
+      console.log('✅ [WHITELIST] Gmail user login approved:', profile.email);
     }
-    
-    if (!user.isWhitelisted) {
-      // Gmail user exists but not whitelisted - blocked
-      console.warn('🚫 [WHITELIST] Gmail user exists but not whitelisted:', profile.email);
-      return res.status(401).json({ error: 'Gmail account not authorized. Please contact admin to enable whitelist.' });
-    }
-    
-    // Valid whitelisted Gmail user - auto-update name from Google profile
-    const oldName = user.name;
-    user.name = profile.name || profile.given_name || user.name;
-    user.picture = profile.picture || user.picture;
-    
-    if (oldName !== user.name) {
-      console.log('✅ [AUTO-UPDATE NAME] Updated:', profile.email, '|', oldName, '→', user.name);
-    }
-    
-    console.log('✅ [WHITELIST] Gmail user login approved:', profile.email);
   } else {
     // Non-Gmail users: auto-create if not exists
     if (!user) {
-      // Auto-assign admin role for nguyenhoa27b1@gmail.com
-      const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
       user = {
         user_id: nextUserId++,
         email: profile.email,
         passwordHash: '',
-        role: isAdminEmail ? Role.ADMIN : Role.USER,
+        role: Role.USER,
         name: profile.name || profile.given_name || profile.email.split('@')[0],
         picture: profile.picture || null,
         isWhitelisted: false, // Non-Gmail users don't need whitelist
       };
       mockUsers.push(user);
-      if (isAdminEmail) {
-        console.log('🔑 [ADMIN ACCESS] Auto-granted admin role to:', profile.email);
-      }
     }
   }
   
