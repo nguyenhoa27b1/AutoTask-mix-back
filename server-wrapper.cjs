@@ -586,6 +586,32 @@ app.post('/api/logout', (req, res) => {
   return res.json({ ok: true });
 });
 
+// --- Debug endpoints (for troubleshooting) ---
+app.get('/api/debug/email-config', (req, res) => {
+  res.json({
+    USE_REAL_EMAIL: process.env.USE_REAL_EMAIL || 'NOT SET',
+    GMAIL_USER: process.env.GMAIL_USER || 'NOT SET',
+    GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ? 'SET (length: ' + process.env.GMAIL_APP_PASSWORD.length + ')' : 'NOT SET',
+    emailMode: process.env.USE_REAL_EMAIL === 'true' ? 'REAL' : 'MOCK',
+    isConfigured: !!(process.env.USE_REAL_EMAIL === 'true' && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+  });
+});
+
+app.get('/api/debug/test-email', async (req, res) => {
+  try {
+    const testResult = await emailService.sendEmail(
+      process.env.GMAIL_USER || 'test@example.com',
+      '[TEST] Production Email Test',
+      `<h1>✅ Test from Production Server</h1>
+       <p>Sent at: ${new Date().toLocaleString()}</p>
+       <p>Server time: ${Date.now()}</p>`
+    );
+    res.json({ success: true, result: testResult, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message, timestamp: new Date().toISOString() });
+  }
+});
+
 // --- Users ---
 app.get('/api/users', filterByDomain('users'), async (req, res) => {
   await sleep(100);
@@ -938,6 +964,27 @@ const server = app.listen(PORT, HOST, () => {
   }
   console.log('📱 Frontend: Serving React app from /dist');
   console.log('🔌 Backend API: Available at /api/*');
+  
+  // Email configuration check on startup
+  console.log('\n📧 Email Configuration Status:');
+  if (process.env.USE_REAL_EMAIL === 'true') {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.error('   ❌ ERROR: Gmail credentials not configured!');
+      console.error('   Set GMAIL_USER and GMAIL_APP_PASSWORD environment variables');
+      console.error('   Current status:');
+      console.error('     - GMAIL_USER:', process.env.GMAIL_USER || 'NOT SET');
+      console.error('     - GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? 'SET' : 'NOT SET');
+    } else {
+      console.log('   ✅ Real email mode ENABLED');
+      console.log('   📬 Using Gmail account:', process.env.GMAIL_USER);
+      console.log('   🔐 App password: configured (' + process.env.GMAIL_APP_PASSWORD.length + ' chars)');
+    }
+  } else {
+    console.log('   ⚠️  MOCK MODE - Emails will only be logged to console');
+    console.log('   Set USE_REAL_EMAIL=true to enable real emails');
+  }
+  console.log('');
+  
   console.log('Server is listening...');
 });
 
