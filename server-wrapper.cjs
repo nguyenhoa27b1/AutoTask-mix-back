@@ -9,9 +9,27 @@ const nodemailer = require('nodemailer');
 const sgMail = require('@sendgrid/mail');
 const cron = require('node-cron');
 const path = require('path');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// We'll accept uploads into memory first, then persist to disk in the submit handler.
-const upload = multer({ storage: multer.memoryStorage() });
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Setup Cloudinary storage for multer
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'autotask-uploads',
+    resource_type: 'auto', // Allows any file type
+    allowed_formats: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'jpeg', 'png', 'xlsx', 'xls', 'zip'],
+  },
+});
+
+const upload = multer({ storage: storage });
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -935,29 +953,23 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
   if (!task) return res.status(404).json({ error: 'Task not found' });
   if (!req.file) return res.status(400).json({ error: 'File required' });
   
-  // ⚠️ WARNING: Local file storage is EPHEMERAL on Render free tier!
-  // Files will be DELETED on every deployment or server restart.
-  // TODO: Migrate to cloud storage (AWS S3, Google Cloud Storage, Cloudinary)
-  // Persist file to disk under uploads/ with unique name
+  // ✅ File automatically uploaded to Cloudinary by multer!
+  // req.file.path = Cloudinary URL
+  // req.file.filename = Cloudinary public_id
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const uploadsDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`[UPLOAD] ✅ File uploaded to Cloudinary: ${req.file.path}`);
+    console.log(`[UPLOAD] Cloudinary public_id: ${req.file.filename}`);
 
     const newId = nextFileId++;
-    const safeName = `${Date.now()}-${newId}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const savedPath = path.join(uploadsDir, safeName);
-    fs.writeFileSync(savedPath, req.file.buffer);
-    
-    console.log(`[UPLOAD] File saved to local disk: ${savedPath} (⚠️ EPHEMERAL - will be lost on Render restart!)`);
-
     const fileMeta = {
       id_file: newId,
       id_user: loggedInUser ? loggedInUser.user_id : 0,
       name: req.file.originalname,
       url: `/files/${newId}/download`,
-      path: savedPath,
+      cloudinary_url: req.file.path,           // Cloudinary URL
+      cloudinary_id: req.file.filename,        // For deletion if needed
+      file_type: req.file.mimetype,
+      file_size: req.file.size,
     };
     mockFiles.push(fileMeta);
 
@@ -1025,15 +1037,21 @@ app.get('/files/:id/download', (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // If the file was saved to disk, stream it
+  // ✅ Redirect to Cloudinary URL (file is stored in cloud)
   try {
+    if (file.cloudinary_url) {
+      console.log(`[DOWNLOAD] ✅ Redirecting to Cloudinary: ${file.name}`);
+      console.log(`[DOWNLOAD] URL: ${file.cloudinary_url}`);
+      // Redirect browser to Cloudinary URL
+      return res.redirect(file.cloudinary_url);
+    }
+    
+    // Fallback for old files (if any exist with local path)
     const fs = require('fs');
     const path = require('path');
     
     if (file.path && fs.existsSync(file.path)) {
-      console.log(`[DOWNLOAD] Serving file: ${file.name} from path: ${file.path}`);
-      
-      // Set proper headers for download
+      console.log(`[DOWNLOAD] ⚠️ Serving legacy file from disk: ${file.name}`);
       const ext = path.extname(file.name).toLowerCase();
       const mimeTypes = {
         '.pdf': 'application/pdf',
@@ -1047,33 +1065,14 @@ app.get('/files/:id/download', (req, res) => {
         '.png': 'image/png',
         '.zip': 'application/zip',
       };
-      
       const contentType = mimeTypes[ext] || 'application/octet-stream';
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
-      
-      // Use res.download() for better file serving
-      return res.download(file.path, file.name, (err) => {
-        if (err) {
-          console.error('[DOWNLOAD] Error sending file:', err.message);
-          if (!res.headersSent) {
-            return res.status(500).json({ error: 'Failed to download file' });
-          }
-        }
-      });
+      return res.download(file.path, file.name);
     }
     
-    // Fallback: if buffer exists (older entries), send it
-    if (file.buffer) {
-      console.log(`[DOWNLOAD] Serving file from buffer: ${file.name}`);
-      res.setHeader('Content-Type', 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
-      return res.send(file.buffer);
-    }
-    
-    console.warn(`[DOWNLOAD] File not found on disk or buffer: ${file.name}`);
-    res.setHeader('Content-Type', 'text/plain');
-    return res.status(404).send(`File not found: ${file.name}`);
+    console.warn(`[DOWNLOAD] ❌ File not found: ${file.name}`);
+    return res.status(404).json({ error: 'File not found' });
   } catch (e) {
     console.error('[DOWNLOAD] Error serving file:', e && e.message);
     return res.status(500).json({ error: 'Failed to serve file' });
