@@ -42,7 +42,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
   const isNewTask = task === null;
   const isAdmin = currentUser.role === Role.ADMIN;
-  const canDelete = task && (isAdmin || task.assigner_id === currentUser.user_id);
+  const isCompleted = task?.status === 'Completed';
+  const canDelete = task && (isAdmin || task.assigner_id === currentUser.user_id) && !isCompleted;
 
   useEffect(() => {
     const isTaskCreator = task ? task.assigner_id === currentUser.user_id : false;
