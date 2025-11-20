@@ -834,32 +834,30 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file')
     const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
     if (idx === -1) return res.status(404).json({ error: 'Task not found' });
 
-    // If a new description file was uploaded, save it
+    // If a new description file was uploaded, save it to Cloudinary
     if (file) {
       try {
-        const fs = require('fs');
-        const path = require('path');
-        const uploadsDir = path.join(__dirname, 'uploads');
-        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
         const newId = nextFileId++;
-        const safeName = `${Date.now()}-${newId}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-        const savedPath = path.join(uploadsDir, safeName);
-        fs.writeFileSync(savedPath, file.buffer);
+        
+        // Cloudinary automatically uploads via multer CloudinaryStorage
+        console.log('✅ Description file uploaded to Cloudinary:', file.path);
 
         const fileMeta = {
           id_file: newId,
           id_user: loggedInUser ? loggedInUser.user_id : 0,
           name: file.originalname,
           url: `/files/${newId}/download`,
-          path: savedPath,
+          cloudinary_url: file.path, // Cloudinary URL
+          cloudinary_id: file.filename, // Cloudinary public_id
+          file_type: file.mimetype,
+          file_size: file.size,
         };
         mockFiles.push(fileMeta);
 
         // Link file to task (description file)
         mockTasks[idx].id_file = newId;
       } catch (e) {
-        console.error('Failed to persist description file:', e && e.message);
+        console.error('Failed to save description file to Cloudinary:', e && e.message);
         return res.status(500).json({ error: 'Failed to save description file' });
       }
     }
@@ -884,26 +882,24 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file')
 
   if (file) {
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const uploadsDir = path.join(__dirname, 'uploads');
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
       descriptionFileId = nextFileId++;
-      const safeName = `${Date.now()}-${descriptionFileId}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const savedPath = path.join(uploadsDir, safeName);
-      fs.writeFileSync(savedPath, file.buffer);
+      
+      // Cloudinary automatically uploads via multer CloudinaryStorage
+      console.log('✅ Description file uploaded to Cloudinary:', file.path);
 
       const fileMeta = {
         id_file: descriptionFileId,
         id_user: loggedInUser ? loggedInUser.user_id : 0,
         name: file.originalname,
         url: `/files/${descriptionFileId}/download`,
-        path: savedPath,
+        cloudinary_url: file.path, // Cloudinary URL
+        cloudinary_id: file.filename, // Cloudinary public_id
+        file_type: file.mimetype,
+        file_size: file.size,
       };
       mockFiles.push(fileMeta);
     } catch (e) {
-      console.error('Failed to persist description file:', e && e.message);
+      console.error('Failed to save description file to Cloudinary:', e && e.message);
       return res.status(500).json({ error: 'Failed to save description file' });
     }
   }
