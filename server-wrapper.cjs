@@ -931,23 +931,42 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
     // Save multiple description files to Cloudinary (autotask-descriptions folder)
     if (files.length > 0) {
       console.log(`[POST /api/tasks] Processing ${files.length} files...`);
-      for (const file of files) {
-        const fileId = nextFileId++;
-        console.log('✅ Description file uploaded to Cloudinary:', file.path);
-        
-        const fileMeta = {
-          id_file: fileId,
-          id_user: loggedInUser ? loggedInUser.user_id : 0,
-          name: file.originalname,
-          url: `/files/${fileId}/download`,
-          cloudinary_url: file.path,
-          cloudinary_id: file.filename,
-          file_type: file.mimetype,
-          file_size: file.size,
-        };
-        mockFiles.push(fileMeta);
-        attachmentIds.push(fileId);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          console.log(`[FILE ${i+1}] Processing:`, {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            hasPath: !!file.path,
+            hasFilename: !!file.filename
+          });
+          
+          if (!file.path || !file.filename) {
+            throw new Error(`File ${file.originalname} missing Cloudinary data (path: ${!!file.path}, filename: ${!!file.filename})`);
+          }
+          
+          const fileId = nextFileId++;
+          console.log(`✅ [FILE ${i+1}] Uploaded to Cloudinary:`, file.path);
+          
+          const fileMeta = {
+            id_file: fileId,
+            id_user: loggedInUser ? loggedInUser.user_id : 0,
+            name: file.originalname,
+            url: `/files/${fileId}/download`,
+            cloudinary_url: file.path,
+            cloudinary_id: file.filename,
+            file_type: file.mimetype,
+            file_size: file.size,
+          };
+          mockFiles.push(fileMeta);
+          attachmentIds.push(fileId);
+        } catch (fileError) {
+          console.error(`❌ [FILE ${i+1}] Error processing file:`, fileError.message);
+          throw new Error(`Failed to process file ${file.originalname}: ${fileError.message}`);
+        }
       }
+      console.log(`[POST /api/tasks] Successfully processed ${attachmentIds.length} files`);
     } else {
       console.log('[POST /api/tasks] No files attached to this task');
     }
