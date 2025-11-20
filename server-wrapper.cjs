@@ -139,6 +139,9 @@ const emailService = {
           </ul>
         </div>
         <p>Vui lòng đăng nhập vào hệ thống để kiểm tra và thực hiện ngay.</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="https://autotask-mix-back.onrender.com" style="background: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">🚀 Truy Cập Hệ Thống</a>
+        </p>
         <hr style="border: 0; border-top: 1px solid #eee;">
         <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Ban Quản Trị AutoTask</p>
       </div>
@@ -161,6 +164,9 @@ const emailService = {
           </ul>
         </div>
         <p>Vui lòng truy cập hệ thống để kiểm tra và đánh giá.</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="https://autotask-mix-back.onrender.com" style="background: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">✅ Kiểm Tra Ngay</a>
+        </p>
         <hr style="border: 0; border-top: 1px solid #eee;">
         <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Hệ Thống AutoTask</p>
       </div>
@@ -189,6 +195,9 @@ const emailService = {
           </ul>
         </div>
         <p style="font-weight: bold; color: #d35400;">⚡ Vui lòng hoàn thành sớm để tránh bị trừ điểm.</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="https://autotask-mix-back.onrender.com" style="background: #f39c12; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">⏰ Hoàn Thành Ngay</a>
+        </p>
         <hr style="border: 0; border-top: 1px solid #eee;">
         <p style="font-size: 12px; color: #7f8c8d;">Đây là email tự động. Vui lòng không trả lời.<br>Hệ Thống AutoTask</p>
       </div>
@@ -212,6 +221,9 @@ const emailService = {
         </div>
         <p style="color: #c0392b; font-weight: bold;">⚠️ Bạn đã bị trừ điểm tín nhiệm cho nhiệm vụ này.</p>
         <p>Vui lòng hoàn thành và nộp bài càng sớm càng tốt để hạn chế ảnh hưởng.</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="https://autotask-mix-back.onrender.com" style="background: #c0392b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">🔴 Nộp Bài Ngay</a>
+        </p>
         <hr style="border: 0; border-top: 1px solid #eee;">
         <p style="font-size: 12px; color: #7f8c8d;">Đây là email tự động. Vui lòng không trả lời.<br>Hệ Thống AutoTask</p>
       </div>
