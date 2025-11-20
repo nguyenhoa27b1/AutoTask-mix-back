@@ -22,10 +22,19 @@ cloudinary.config({
 // Setup Cloudinary storage for multer (only for submit files)
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'autotask-uploads',
-    resource_type: 'auto', // Allows any file type
-    // Remove allowed_formats to accept ALL file types
+  params: async (req, file) => {
+    // Keep original filename (remove extension, Cloudinary adds it back)
+    const originalName = file.originalname.replace(/\.[^/.]+$/, '');
+    // Add timestamp to avoid overwriting files with same name
+    const timestamp = Date.now();
+    
+    return {
+      folder: 'autotask-uploads',
+      resource_type: 'auto', // Allows any file type
+      public_id: `${timestamp}-${originalName}`, // Keep original name with timestamp
+      use_filename: true,
+      unique_filename: false, // Don't add random string
+    };
   },
 });
 
