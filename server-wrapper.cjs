@@ -870,121 +870,143 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
   try {
     await sleep(150);
     const data = req.body;
-    const files = req.files || []; // Multiple files
+    const files = req.files || []; // Multiple files - ARRAY not single file
     
     console.log('[POST /api/tasks] Received:', { 
       id_task: data.id_task, 
       title: data.title, 
-      filesCount: files.length 
+      filesCount: files.length,
+      hasFiles: Array.isArray(files)
     });
 
     if (data.id_task) {
-    // Update existing task
-    const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
-    if (idx === -1) return res.status(404).json({ error: 'Task not found' });
+      // Update existing task
+      const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
+      if (idx === -1) return res.status(404).json({ error: 'Task not found' });
 
-    // Save multiple description files to Cloudinary
+      // Save multiple description files to Cloudinary
+      if (files.length > 0) {
+        const newFileIds = [];
+        for (const file of files) {
+          const newId = nextFileId++;
+          console.log('✅ Description file uploaded to Cloudinary:', file.path);
+          
+          const fileMeta = {
+            id_file: newId,
+            id_user: loggedInUser ? loggedInUser.user_id : 0,
+            name: file.originalname,
+            url: `/files/${newId}/download`,
+            cloudinary_url: file.path,
+            cloudinary_id: file.filename,
+            file_type: file.mimetype,
+            file_size: file.size,
+          };
+          mockFiles.push(fileMeta);
+          newFileIds.push(newId);
+        }
+        // Append new file IDs to existing attachment_ids
+        mockTasks[idx].attachment_ids = [...(mockTasks[idx].attachment_ids || []), ...newFileIds];
+      }
+
+      // Update task fields from form data (convert numeric strings)
+      const taskUpdate = {
+        title: data.title || mockTasks[idx].title,
+        description: data.description || mockTasks[idx].description,
+        priority: data.priority ? Number(data.priority) : mockTasks[idx].priority,
+        deadline: data.deadline || mockTasks[idx].deadline,
+        assignee_id: data.assignee_id ? Number(data.assignee_id) : mockTasks[idx].assignee_id,
+        assigner_id: data.assigner_id ? Number(data.assigner_id) : mockTasks[idx].assigner_id,
+        status: data.status || mockTasks[idx].status,
+      };
+      mockTasks[idx] = { ...mockTasks[idx], ...taskUpdate };
+      
+      console.log('[POST /api/tasks] Task updated successfully:', mockTasks[idx].id_task);
+      return res.json(mockTasks[idx]);
+    }
+
+    // Create new task
+    const newTaskId = nextTaskId++;
+    const attachmentIds = [];
+
+    // Save multiple description files to Cloudinary (autotask-descriptions folder)
     if (files.length > 0) {
-      const newFileIds = [];
+      console.log(`[POST /api/tasks] Processing ${files.length} files...`);
       for (const file of files) {
-        const newId = nextFileId++;
+        const fileId = nextFileId++;
         console.log('✅ Description file uploaded to Cloudinary:', file.path);
         
         const fileMeta = {
-          id_file: newId,
+          id_file: fileId,
           id_user: loggedInUser ? loggedInUser.user_id : 0,
           name: file.originalname,
-          url: `/files/${newId}/download`,
+          url: `/files/${fileId}/download`,
           cloudinary_url: file.path,
           cloudinary_id: file.filename,
           file_type: file.mimetype,
           file_size: file.size,
         };
         mockFiles.push(fileMeta);
-        newFileIds.push(newId);
+        attachmentIds.push(fileId);
       }
-      // Append new file IDs to existing attachment_ids
-      mockTasks[idx].attachment_ids = [...(mockTasks[idx].attachment_ids || []), ...newFileIds];
+    } else {
+      console.log('[POST /api/tasks] No files attached to this task');
     }
 
-    // Update task fields from form data (convert numeric strings)
-    const taskUpdate = {
-      title: data.title || mockTasks[idx].title,
-      description: data.description || mockTasks[idx].description,
-      priority: data.priority ? Number(data.priority) : mockTasks[idx].priority,
-      deadline: data.deadline || mockTasks[idx].deadline,
-      assignee_id: data.assignee_id ? Number(data.assignee_id) : mockTasks[idx].assignee_id,
-      assigner_id: data.assigner_id ? Number(data.assigner_id) : mockTasks[idx].assigner_id,
-      status: data.status || mockTasks[idx].status,
+    const newTask = {
+      id_task: newTaskId,
+      title: data.title || 'Untitled',
+      description: data.description || '',
+      assignee_id: Number(data.assignee_id) || (loggedInUser ? loggedInUser.user_id : 1),
+      assigner_id: Number(data.assigner_id) || (loggedInUser ? loggedInUser.user_id : 1),
+      priority: Number(data.priority) || 2,
+      deadline: data.deadline || new Date().toISOString(),
+      date_created: new Date().toISOString(),
+      date_submit: null,
+      attachment_ids: attachmentIds, // Array of description file IDs (can be empty)
+      submit_file_id: null,
+      score: null,
+      status: data.status || 'Pending',
     };
-    mockTasks[idx] = { ...mockTasks[idx], ...taskUpdate };
-    return res.json(mockTasks[idx]);
-  }
+    
+    console.log('[POST /api/tasks] Creating task:', {
+      id: newTask.id_task,
+      title: newTask.title,
+      attachmentCount: attachmentIds.length
+    });
+    
+    mockTasks.push(newTask);
 
-  // Create new task
-  const newTaskId = nextTaskId++;
-  const attachmentIds = [];
-
-  // Save multiple description files to Cloudinary (autotask-descriptions folder)
-  if (files.length > 0) {
-    for (const file of files) {
-      const fileId = nextFileId++;
-      console.log('✅ Description file uploaded to Cloudinary:', file.path);
+    // Send email notification to assignee
+    try {
+      const assignee = mockUsers.find(u => u.user_id === newTask.assignee_id);
+      const assigner = mockUsers.find(u => u.user_id === newTask.assigner_id) || loggedInUser;
       
-      const fileMeta = {
-        id_file: fileId,
-        id_user: loggedInUser ? loggedInUser.user_id : 0,
-        name: file.originalname,
-        url: `/files/${fileId}/download`,
-        cloudinary_url: file.path,
-        cloudinary_id: file.filename,
-        file_type: file.mimetype,
-        file_size: file.size,
-      };
-      mockFiles.push(fileMeta);
-      attachmentIds.push(fileId);
+      console.log('[POST /api/tasks] Email notification:', { 
+        hasAssignee: !!assignee, 
+        hasAssigner: !!assigner,
+        assigneeId: newTask.assignee_id,
+        assignerId: newTask.assigner_id
+      });
+      
+      if (assignee && assigner) {
+        emailService.notifyTaskAssigned(newTask, assignee, assigner).catch(err => 
+          console.error('[EMAIL] Failed to send task assignment notification:', err.message)
+        );
+      }
+    } catch (emailError) {
+      console.error('[POST /api/tasks] Email notification error (non-critical):', emailError.message);
     }
-  }
 
-  const newTask = {
-    id_task: newTaskId,
-    title: data.title || 'Untitled',
-    description: data.description || '',
-    assignee_id: Number(data.assignee_id) || currentUser.user_id, // Use current user if not provided
-    assigner_id: Number(data.assigner_id) || (loggedInUser ? loggedInUser.user_id : 1),
-    priority: Number(data.priority) || 2,
-    deadline: data.deadline || new Date().toISOString(),
-    date_created: new Date().toISOString(),
-    date_submit: null,
-    attachment_ids: attachmentIds, // Array of description file IDs
-    submit_file_id: null,
-    score: null,
-    status: data.status || 'Pending',
-  };
-  
-  console.log('[POST /api/tasks] Creating task:', newTask);
-  mockTasks.push(newTask);
-
-  // Send email notification to assignee
-  const assignee = mockUsers.find(u => u.user_id === newTask.assignee_id);
-  const assigner = mockUsers.find(u => u.user_id === newTask.assigner_id) || loggedInUser;
-  console.log('[POST /api/tasks] Email notification:', { 
-    hasAssignee: !!assignee, 
-    hasAssigner: !!assigner 
-  });
-  
-  if (assignee && assigner) {
-    emailService.notifyTaskAssigned(newTask, assignee, assigner).catch(err => 
-      console.error('[EMAIL] Failed to send task assignment notification:', err.message)
-    );
-  }
-
-  return res.json(newTask);
+    console.log('[POST /api/tasks] Task created successfully:', newTask.id_task);
+    return res.json(newTask);
+    
   } catch (error) {
-    console.error('[POST /api/tasks] Error:', error);
+    console.error('[POST /api/tasks] TASK CREATION CRASH:', error);
+    console.error('[POST /api/tasks] Error stack:', error.stack);
     return res.status(500).json({ 
       error: 'Failed to create/update task', 
-      message: error.message 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
