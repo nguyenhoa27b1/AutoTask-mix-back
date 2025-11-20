@@ -223,7 +223,7 @@ export const api = {
                 
                 // Add multiple files
                 for (let i = 0; i < descriptionFiles.length; i++) {
-                    formData.append('files', descriptionFiles[i]);
+                    formData.append('attachments', descriptionFiles[i]);
                 }
 
                 console.log('[API] Sending FormData with', descriptionFiles.length, 'files');

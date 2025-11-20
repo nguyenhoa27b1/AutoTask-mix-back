@@ -887,7 +887,7 @@ app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
 });
 
 app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
-  uploadDescription.array('files', 10)(req, res, (err) => {
+  uploadDescription.array('attachments', 10)(req, res, (err) => {
     if (err) {
       console.error('[MULTER ERROR]', err);
       return res.status(400).json({ 
