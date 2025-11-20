@@ -230,6 +230,36 @@ const emailService = {
       </div>
     `;
     await this.sendEmail(assignee.email, subject, html);
+  },
+
+  // Nộp bài quá hạn (gửi cho Admin)
+  async notifyOverdueSubmission(task, submitter, admins) {
+    const subject = `[AutoTask] 🔴 Nộp trễ: ${task.title}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #c0392b;">Xin chào Admin,</h3>
+        <p>Thành viên <b>${submitter.name || submitter.email}</b> vừa báo cáo hoàn thành nhiệm vụ, nhưng đã <b style="color: #c0392b;">QUÁ HẠN</b>.</p>
+        <div style="background: #f2dede; padding: 15px; border-left: 4px solid #c0392b;">
+          <ul style="list-style: none; padding: 0;">
+            <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
+            <li>⏰ <b>Thời gian nộp:</b> ${new Date().toLocaleString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
+          </ul>
+        </div>
+        <p style="color: #c0392b; font-weight: bold;">⚠️ Lưu ý: Task này đã bị trừ điểm (-1) theo quy tắc quá hạn.</p>
+        <p>Vui lòng truy cập hệ thống để kiểm tra và đánh giá.</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="https://autotask-mix-back.onrender.com" style="background: #c0392b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">🔴 Kiểm Tra Ngay</a>
+        </p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Hệ Thống AutoTask</p>
+      </div>
+    `;
+    
+    // Send to all admins
+    for (const admin of admins) {
+      await this.sendEmail(admin.email, subject, html);
+    }
   }
 };
 
@@ -894,22 +924,34 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
     mockFiles.push(fileMeta);
 
     task.submit_file_id = fileMeta.id_file;
-    task.date_submit = new Date().toISOString();
+    const submissionTime = new Date();
+    task.date_submit = submissionTime.toISOString();
     task.score = calcScoreForSubmission(task, fileMeta);
     task.status = 'Completed';
 
-    // ✅ Send email notification to assigner (task creator)
+    // ✅ Check if submission is overdue and send appropriate email
     const submitter = mockUsers.find(u => u.user_id === task.assignee_id) || loggedInUser;
     const assigner = mockUsers.find(u => u.user_id === task.assigner_id);
+    const admins = mockUsers.filter(u => u.role === Role.ADMIN);
     
     if (submitter && assigner) {
-      console.log(`📧 [EMAIL] Sending task completion notification to assigner: ${assigner.email}`);
-      // Use notifyTaskCompleted which sends to all admins, OR create a new notifyTaskSubmitted for just assigner
-      // For now, notify all admins
-      const admins = mockUsers.filter(u => u.role === Role.ADMIN);
-      emailService.notifyTaskCompleted(task, submitter, admins).catch(err => 
-        console.error('[EMAIL] Failed to send task completion notification:', err.message)
-      );
+      // Check if submission is after deadline
+      const deadlineDate = new Date(task.deadline);
+      const isOverdue = submissionTime > deadlineDate;
+      
+      if (isOverdue) {
+        // Send overdue submission email (red warning)
+        console.log(`📧 [EMAIL] Sending OVERDUE submission notification to admins for task: ${task.title}`);
+        emailService.notifyOverdueSubmission(task, submitter, admins).catch(err => 
+          console.error('[EMAIL] Failed to send overdue submission notification:', err.message)
+        );
+      } else {
+        // Send normal completion email (green success)
+        console.log(`📧 [EMAIL] Sending task completion notification to admins for task: ${task.title}`);
+        emailService.notifyTaskCompleted(task, submitter, admins).catch(err => 
+          console.error('[EMAIL] Failed to send task completion notification:', err.message)
+        );
+      }
     } else {
       console.warn('⚠️ [EMAIL] Cannot send task submission email - missing submitter or assigner');
     }
