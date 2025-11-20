@@ -867,11 +867,18 @@ app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
 });
 
 app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.array('files', 10), async (req, res) => {
-  await sleep(150);
-  const data = req.body;
-  const files = req.files || []; // Multiple files
+  try {
+    await sleep(150);
+    const data = req.body;
+    const files = req.files || []; // Multiple files
+    
+    console.log('[POST /api/tasks] Received:', { 
+      id_task: data.id_task, 
+      title: data.title, 
+      filesCount: files.length 
+    });
 
-  if (data.id_task) {
+    if (data.id_task) {
     // Update existing task
     const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
     if (idx === -1) return res.status(404).json({ error: 'Task not found' });
@@ -966,6 +973,13 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
   }
 
   return res.json(newTask);
+  } catch (error) {
+    console.error('[POST /api/tasks] Error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to create/update task', 
+      message: error.message 
+    });
+  }
 });
 
 app.delete('/api/tasks/:id', async (req, res) => {
