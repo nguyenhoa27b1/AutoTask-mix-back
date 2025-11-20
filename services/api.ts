@@ -226,8 +226,13 @@ export const api = {
                     formData.append('files', descriptionFiles[i]);
                 }
 
+                console.log('[API] Sending FormData with', descriptionFiles.length, 'files');
+                
+                // IMPORTANT: Do NOT set Content-Type header for FormData
+                // Browser will automatically set it with correct boundary
                 const headers: HeadersInit = {};
                 if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+                // DO NOT add 'Content-Type': browser handles this for FormData
 
                 const response = await fetch(`${API_BASE_URL}/tasks`, {
                     method: 'POST',
@@ -236,8 +241,14 @@ export const api = {
                 });
 
                 if (!response.ok) {
-                    const error = await response.json().catch(() => ({ error: response.statusText }));
-                    throw new Error(error.error || `API error: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('[API] Upload error:', response.status, errorText);
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        throw new Error(errorJson.error || errorJson.details || `Upload failed: ${response.status}`);
+                    } catch (e) {
+                        throw new Error(errorText || `Upload failed: ${response.status}`);
+                    }
                 }
 
                 return await response.json();
