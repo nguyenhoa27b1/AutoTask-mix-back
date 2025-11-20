@@ -125,33 +125,45 @@ const emailService = {
 
   // Task được giao mới
   async notifyTaskAssigned(task, assignee, assigner) {
-    const subject = `[Giao Việc Mới] Task ${task.title} đã được giao cho bạn`;
+    const subject = `[AutoTask] 🆕 Bạn nhận được nhiệm vụ mới: ${task.title}`;
     const html = `
-      <h3>Chào ${assignee.name || assignee.email},</h3>
-      <p>Bạn vừa được giao một công việc mới: <strong>${task.title}</strong>.</p>
-      <ul>
-        <li><strong>Thời hạn:</strong> ${this.formatDate(task.deadline)}</li>
-        <li><strong>Được giao bởi:</strong> ${assigner.name || assigner.email}</li>
-        <li><strong>Mô tả:</strong> ${task.description || 'Không có mô tả'}</li>
-      </ul>
-      <p>Vui lòng kiểm tra và bắt đầu thực hiện.</p>
-      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #2c3e50;">Xin chào ${assignee.name || assignee.email},</h3>
+        <p>Bạn vừa được Admin giao một nhiệm vụ mới trên hệ thống AutoTask.</p>
+        <div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #3498db;">
+          <ul style="list-style: none; padding: 0;">
+            <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
+            <li>📝 <b>Mô tả:</b> ${task.description || 'Không có mô tả'}</li>
+            <li>👤 <b>Người giao:</b> ${assigner.name || assigner.email}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+          </ul>
+        </div>
+        <p>Vui lòng đăng nhập vào hệ thống để kiểm tra và thực hiện ngay.</p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Ban Quản Trị AutoTask</p>
+      </div>
     `;
     await this.sendEmail(assignee.email, subject, html);
   },
 
   // Task đã hoàn thành
   async notifyTaskCompleted(task, submitter, admins) {
-    const subject = `[Hoàn thành] Task ${task.title} đã được nộp`;
+    const subject = `[AutoTask] ✅ Nhiệm vụ đã hoàn thành: ${task.title}`;
     const html = `
-      <h3>Chào Admin,</h3>
-      <p>Task <strong>${task.title}</strong> đã được ${submitter.name || submitter.email} hoàn thành và nộp vào hệ thống.</p>
-      <ul>
-        <li><strong>Thời điểm nộp:</strong> ${this.formatDate(task.date_submit)}</li>
-        <li><strong>Điểm số:</strong> ${task.score !== null ? task.score : 'Chưa chấm'}</li>
-      </ul>
-      <p>Vui lòng xem xét và chấm điểm.</p>
-      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #27ae60;">Xin chào Admin,</h3>
+        <p>Thành viên <b>${submitter.name || submitter.email}</b> vừa báo cáo hoàn thành nhiệm vụ.</p>
+        <div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #27ae60;">
+          <ul style="list-style: none; padding: 0;">
+            <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
+            <li>⏰ <b>Thời gian nộp:</b> ${new Date(task.date_submit || Date.now()).toLocaleString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>🎯 <b>Điểm số:</b> ${task.score !== null ? task.score : 'Chưa chấm'}</li>
+          </ul>
+        </div>
+        <p>Vui lòng truy cập hệ thống để kiểm tra và đánh giá.</p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Hệ Thống AutoTask</p>
+      </div>
     `;
     
     // Send to all admins
@@ -164,30 +176,45 @@ const emailService = {
 
   // Sắp tới deadline (1 ngày trước)
   async notifyDeadlineApproaching(task, assignee) {
-    const subject = `[NHẮC NHỞ KHẨN] Task ${task.title} sẽ hết hạn trong 24 giờ`;
+    const subject = `[AutoTask] ⚠️ Nhắc nhở: Nhiệm vụ sắp đến hạn - ${task.title}`;
     const html = `
-      <h3>Chào ${assignee.name || assignee.email},</h3>
-      <p>Task <strong>${task.title}</strong> của bạn sắp hết hạn.</p>
-      <ul>
-        <li><strong>Thời hạn:</strong> ${this.formatDate(task.deadline)} (Còn chưa đầy 1 ngày)</li>
-      </ul>
-      <p style="color: orange; font-weight: bold;">Vui lòng hoàn thành Task trước thời gian này.</p>
-      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #d35400;">Xin chào ${assignee.name || assignee.email},</h3>
+        <p>Đây là email nhắc nhở tự động. Nhiệm vụ của bạn sắp đến hạn chót vào ngày mai.</p>
+        <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #f1c40f;">
+          <ul style="list-style: none; padding: 0;">
+            <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>⏰ <b>Thời gian còn lại:</b> Chưa đầy 24 giờ</li>
+          </ul>
+        </div>
+        <p style="font-weight: bold; color: #d35400;">⚡ Vui lòng hoàn thành sớm để tránh bị trừ điểm.</p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Đây là email tự động. Vui lòng không trả lời.<br>Hệ Thống AutoTask</p>
+      </div>
     `;
     await this.sendEmail(assignee.email, subject, html);
   },
 
   // Quá hạn deadline (1 ngày sau)
   async notifyDeadlineOverdue(task, assignee) {
-    const subject = `[QUÁ HẠN] Task ${task.title} đã hết hạn 1 ngày`;
+    const subject = `[AutoTask] ⛔ THÔNG BÁO QUÁ HẠN: ${task.title}`;
     const html = `
-      <h3>Chào ${assignee.name || assignee.email},</h3>
-      <p>Task <strong>${task.title}</strong> đã quá thời hạn nộp <strong>1 ngày</strong>.</p>
-      <ul>
-        <li><strong>Thời hạn đã qua:</strong> ${this.formatDate(task.deadline)}</li>
-      </ul>
-      <p style="color: red; font-weight: bold;">Task này đã bị đánh dấu là quá hạn.</p>
-      <p>👉 <a href="http://localhost:3000">Link tới Task</a></p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #c0392b;">Xin chào ${assignee.name || assignee.email},</h3>
+        <p>Hệ thống ghi nhận nhiệm vụ sau đây của bạn đã <b style="color: #c0392b;">QUÁ HẠN</b>.</p>
+        <div style="background: #f2dede; padding: 15px; border-left: 4px solid #c0392b;">
+          <ul style="list-style: none; padding: 0;">
+            <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
+            <li>📅 <b>Hạn chót đã qua:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>⏱️ <b>Đã quá hạn:</b> 1 ngày</li>
+          </ul>
+        </div>
+        <p style="color: #c0392b; font-weight: bold;">⚠️ Bạn đã bị trừ điểm tín nhiệm cho nhiệm vụ này.</p>
+        <p>Vui lòng hoàn thành và nộp bài càng sớm càng tốt để hạn chế ảnh hưởng.</p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Đây là email tự động. Vui lòng không trả lời.<br>Hệ Thống AutoTask</p>
+      </div>
     `;
     await this.sendEmail(assignee.email, subject, html);
   }
