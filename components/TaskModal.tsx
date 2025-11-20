@@ -253,9 +253,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 <p><strong>Status:</strong> Completed</p>
                 <p><strong>Submitted on:</strong> {new Date(task.date_submit!).toLocaleString()}</p>
                 <p><strong>Score:</strong> {task.score}</p>
-                {descriptionFileDetails && (
-                    <p><strong>Description File: </strong> 
-                        <a href="#" onClick={(e) => { e.preventDefault(); onOpenFile(descriptionFileDetails.id_file); }} className="font-medium hover:underline">{descriptionFileDetails.name}</a>
+                {task.attachments && task.attachments.length > 0 && (
+                    <p><strong>Description Files: </strong> 
+                        {task.attachments.map((file, idx) => (
+                            <span key={file.id_file}>
+                                <a href="#" onClick={(e) => { e.preventDefault(); onOpenFile(file.id_file); }} className="font-medium hover:underline">{file.name}</a>
+                                {idx < task.attachments!.length - 1 && ', '}
+                            </span>
+                        ))}
                     </p>
                 )}
                 {submissionFileDetails && (
@@ -269,10 +274,15 @@ const TaskModal: React.FC<TaskModalProps> = ({
           {!isNewTask && task.status === 'Pending' && task.assignee_id === currentUser.user_id && (
             <div className="border-t pt-4 mt-4 dark:border-gray-600">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Submit Your Work</h3>
-               {descriptionFileDetails && (
+               {task.attachments && task.attachments.length > 0 && (
                  <div className="mb-3 text-sm">
-                    <span className="font-semibold text-gray-700 dark:text-gray-300">Description File: </span>
-                    <a href="#" onClick={(e) => { e.preventDefault(); onOpenFile(descriptionFileDetails.id_file); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">{descriptionFileDetails.name}</a>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">Description Files: </span>
+                    {task.attachments.map((file, idx) => (
+                        <span key={file.id_file}>
+                            <a href="#" onClick={(e) => { e.preventDefault(); onOpenFile(file.id_file); }} className="text-indigo-600 dark:text-indigo-400 hover:underline">{file.name}</a>
+                            {idx < task.attachments!.length - 1 && ', '}
+                        </span>
+                    ))}
                  </div>
               )}
               <input type="file" onChange={handleSubmissionFileChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/50 dark:file:text-indigo-300 dark:hover:file:bg-indigo-900"/>

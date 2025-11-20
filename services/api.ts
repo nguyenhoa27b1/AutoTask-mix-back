@@ -3,10 +3,14 @@ import { User, Task, Role, AppFile, Priority, GoogleProfile } from '../types';
 // Backend API base URL
 // In production (same domain), use relative path '/api'
 // In development (localhost), use localhost:4000
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 
-    (import.meta.env.MODE === 'production' 
-        ? '/api'  // Production: same domain
-        : `http://${window.location.hostname}:4000/api`); // Dev: localhost:4000
+const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+const API_BASE_URL = (
+    typeof (import.meta as any).env !== 'undefined' && (import.meta as any).env.VITE_API_BASE_URL
+        ? (import.meta as any).env.VITE_API_BASE_URL
+        : (isProduction 
+            ? '/api'  // Production: same domain
+            : `http://${window.location.hostname}:4000/api`) // Dev: localhost:4000
+);
 
 // Helper to make HTTP requests
 async function fetchFromBackend<T>(
