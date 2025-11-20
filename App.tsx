@@ -161,18 +161,18 @@ const App: React.FC = () => {
 
     const handleSaveTask = async (
         taskData: Omit<Task, 'id_task' | 'date_created'> & { id_task?: number },
-        descriptionFile?: File | null
+        descriptionFiles?: FileList | null
     ) => {
         if (!currentUser) return;
         try {
-            const savedTask = await api.saveTask(taskData, descriptionFile || null, currentUser);
+            const savedTask = await api.saveTask(taskData, descriptionFiles || null, currentUser);
             if (taskData.id_task) {
                 setTasks(tasks.map(t => t.id_task === savedTask.id_task ? savedTask : t));
             } else {
                 setTasks(prevTasks => [...prevTasks, savedTask]);
             }
             // If a file was involved, refetch files list
-            if (descriptionFile) {
+            if (descriptionFiles && descriptionFiles.length > 0) {
                 const updatedFiles = await api.getFiles();
                 setFiles(updatedFiles);
             }
@@ -219,6 +219,22 @@ const App: React.FC = () => {
             if (newWindow) newWindow.opener = null;
         } else {
             alert("File URL not found.");
+        }
+    };
+
+    const handleDeleteAttachment = async (taskId: number, fileId: number) => {
+        try {
+            await api.deleteAttachment(taskId, fileId);
+            // Refetch tasks and files
+            const [updatedTasks, updatedFiles] = await Promise.all([
+                api.getTasks(),
+                api.getFiles()
+            ]);
+            setTasks(updatedTasks);
+            setFiles(updatedFiles);
+        } catch (error) {
+            console.error("Failed to delete attachment", error);
+            alert(`Error deleting attachment: ${(error as Error).message}`);
         }
     };
 
@@ -289,7 +305,7 @@ const App: React.FC = () => {
                 onDelete={handleDeleteTask}
                 onSubmitTask={handleSubmitTask}
                 onOpenFile={handleOpenFile}
-                onDeleteAttachment={taskMgmt.deleteAttachment}
+                onDeleteAttachment={handleDeleteAttachment}
             />
             <UserTasksModal
                 isOpen={isUserTasksModalOpen}
