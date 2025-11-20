@@ -954,6 +954,16 @@ app.delete('/api/tasks/:id', async (req, res) => {
   const id = Number(req.params.id);
   const idx = mockTasks.findIndex((t) => t.id_task === id);
   if (idx === -1) return res.status(404).json({ error: 'Task not found' });
+  
+  // Prevent deletion of completed tasks
+  const task = mockTasks[idx];
+  if (task.status === 'Completed') {
+    return res.status(403).json({ 
+      error: 'Cannot delete completed task',
+      message: 'Tasks that have been completed cannot be deleted to maintain record integrity.'
+    });
+  }
+  
   mockTasks.splice(idx, 1);
   return res.json({ ok: true });
 });
