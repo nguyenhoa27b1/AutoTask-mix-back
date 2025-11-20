@@ -872,11 +872,16 @@ app.delete('/api/users/:id', async (req, res) => {
 // --- Tasks ---
 app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   await sleep(100);
+  console.log('[DEBUG GET /api/tasks] mockFiles.length:', mockFiles.length);
+  console.log('[DEBUG GET /api/tasks] mockTasks.length:', mockTasks.length);
+  
   // Populate attachment_ids with full file objects
   const tasksWithAttachments = mockTasks.map(task => {
     const attachments = (task.attachment_ids || [])
       .map(fileId => mockFiles.find(f => f.id_file === fileId))
       .filter(Boolean); // Remove undefined
+    
+    console.log(`[DEBUG GET /api/tasks] Task ${task.id_task}: ${task.attachment_ids?.length || 0} attachment_ids → ${attachments.length} populated`);
     
     return {
       ...task,
@@ -999,6 +1004,8 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
           };
           mockFiles.push(fileMeta);
           attachmentIds.push(fileId);
+          console.log(`[DEBUG] mockFiles.length after push: ${mockFiles.length}`);
+          console.log(`[DEBUG] File metadata saved:`, { id: fileId, name: fileMeta.name, cloudinary_url: fileMeta.cloudinary_url });
         } catch (fileError) {
           console.error(`❌ [FILE ${i+1}] Error processing file:`, fileError.message);
           throw new Error(`Failed to process file ${file.originalname}: ${fileError.message}`);
@@ -1055,11 +1062,21 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
     }
 
     console.log('[POST /api/tasks] Task created successfully:', newTask.id_task);
+    console.log('[DEBUG] Task attachment_ids:', newTask.attachment_ids);
+    console.log('[DEBUG] mockFiles.length:', mockFiles.length);
+    console.log('[DEBUG] mockFiles IDs:', mockFiles.map(f => f.id_file));
     
     // ✅ Populate attachments array before returning
     const attachments = (newTask.attachment_ids || [])
-      .map(fileId => mockFiles.find(f => f.id_file === fileId))
+      .map(fileId => {
+        const found = mockFiles.find(f => f.id_file === fileId);
+        console.log(`[DEBUG] Looking for fileId ${fileId}: ${found ? 'FOUND' : 'NOT FOUND'}`);
+        return found;
+      })
       .filter(Boolean);
+    
+    console.log('[DEBUG] Populated attachments count:', attachments.length);
+    console.log('[DEBUG] Attachments data:', attachments.map(a => ({ id: a.id_file, name: a.name })));
     
     return res.json({ ...newTask, attachments });
     
