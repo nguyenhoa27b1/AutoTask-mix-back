@@ -19,21 +19,34 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+console.log('[CLOUDINARY] Configuration loaded:', {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? '✓' : '✗',
+  api_key: process.env.CLOUDINARY_API_KEY ? '✓' : '✗',
+  api_secret: process.env.CLOUDINARY_API_SECRET ? '✓' : '✗'
+});
+
 // Setup Cloudinary storage - 2 separate folders for different file types
 // 1. Storage for DESCRIPTION files (admin uploads when creating task)
 const descriptionStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    const timestamp = Date.now();
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    
-    return {
-      folder: 'autotask-descriptions', // Folder for description files
-      resource_type: 'auto',
-      public_id: `${timestamp}-${safeName}`,
-      use_filename: true,
-      unique_filename: false,
-    };
+    try {
+      const timestamp = Date.now();
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      
+      console.log(`[CLOUDINARY STORAGE] Uploading: ${file.originalname} → autotask-descriptions`);
+      
+      return {
+        folder: 'autotask-descriptions', // Folder for description files
+        resource_type: 'auto',
+        public_id: `${timestamp}-${safeName}`,
+        use_filename: true,
+        unique_filename: false,
+      };
+    } catch (error) {
+      console.error('[CLOUDINARY STORAGE ERROR]', error);
+      throw error;
+    }
   },
 });
 
@@ -58,7 +71,14 @@ const submitStorage = new CloudinaryStorage({
 // 1. uploadDescription - for description files (saves to autotask-descriptions) - MULTIPLE FILES
 // 2. uploadSubmission - for submit files (saves to autotask-submissions) - SINGLE FILE
 // 3. uploadToMemory - for temporary files (not saved)
-const uploadDescription = multer({ storage: descriptionStorage });
+const uploadDescription = multer({ 
+  storage: descriptionStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    console.log('[MULTER] Receiving file:', file.originalname);
+    cb(null, true);
+  }
+});
 const uploadSubmission = multer({ storage: submitStorage });
 const uploadToMemory = multer({ storage: multer.memoryStorage() });
 const app = express();
@@ -866,7 +886,18 @@ app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   return res.json(tasksWithAttachments);
 });
 
-app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.array('files', 10), async (req, res) => {
+app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
+  uploadDescription.array('files', 10)(req, res, (err) => {
+    if (err) {
+      console.error('[MULTER ERROR]', err);
+      return res.status(400).json({ 
+        error: 'File upload failed', 
+        details: err.message 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     await sleep(150);
     const data = req.body;
@@ -876,7 +907,8 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
       id_task: data.id_task, 
       title: data.title, 
       filesCount: files.length,
-      hasFiles: Array.isArray(files)
+      hasFiles: Array.isArray(files),
+      bodyKeys: Object.keys(req.body)
     });
 
     if (data.id_task) {

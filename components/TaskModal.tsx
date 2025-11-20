@@ -45,7 +45,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const isNewTask = task === null;
   const isAdmin = currentUser.role === Role.ADMIN;
   const isCompleted = task?.status === 'Completed' || task?.status === 'submitted';
+  const isSubmitted = task?.submit_file_id !== null && task?.submit_file_id !== undefined;
   const canDelete = task && (isAdmin || task.assigner_id === currentUser.user_id) && !isCompleted;
+  const canDeleteAttachment = canEdit && !isCompleted && !isSubmitted;
 
   useEffect(() => {
     const isTaskCreator = task ? task.assigner_id === currentUser.user_id : false;
@@ -175,7 +177,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     >
                       {file.name}
                     </a>
-                    {canEdit && !isCompleted && (
+                    {canDeleteAttachment && (
                       <button
                         onClick={() => handleDeleteAttachment(file.id_file)}
                         className="ml-2 text-red-500 hover:text-red-700"
