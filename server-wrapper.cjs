@@ -1022,16 +1022,9 @@ app.get('/files/:id/download', (req, res) => {
   const file = mockFiles.find((f) => f.id_file === id);
   if (!file) return res.status(404).json({ error: 'File not found' });
 
-  // Require Authorization header with valid token to allow file download
-  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
-  let token = null;
-  if (authHeader && typeof authHeader === 'string') {
-    if (authHeader.startsWith('Bearer ')) token = authHeader.slice(7).trim();
-    else token = authHeader.trim();
-  }
-  if (!token || token !== authToken) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Note: No authentication required for download
+  // Cloudinary URLs are public but hard to guess (contains public_id)
+  // If you need private files, use Cloudinary signed URLs
 
   // ✅ Redirect to Cloudinary URL (file is stored in cloud)
   try {
