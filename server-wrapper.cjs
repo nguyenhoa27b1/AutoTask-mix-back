@@ -674,7 +674,7 @@ app.post('/api/login/google', async (req, res) => {
   
   // Special case: Auto-grant admin + whitelist for admin emails
   const ADMIN_EMAILS = [
-    'nguyenhoa27b1@gmail.com',
+    'nguyenhoa27b1@gmail.com', 'ntrung83@gmail.com', 'khanhhoa.pfc@gmail.com'
     // Thêm email admin khác ở đây
   ];
   const isAdminEmail = ADMIN_EMAILS.includes(profile.email);
