@@ -23,15 +23,14 @@ cloudinary.config({
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    // Keep original filename (remove extension, Cloudinary adds it back)
-    const originalName = file.originalname.replace(/\.[^/.]+$/, '');
-    // Add timestamp to avoid overwriting files with same name
+    // Keep original filename with extension
     const timestamp = Date.now();
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     
     return {
       folder: 'autotask-uploads',
       resource_type: 'auto', // Allows any file type
-      public_id: `${timestamp}-${originalName}`, // Keep original name with timestamp
+      public_id: `${timestamp}-${safeName}`, // Keep full name with extension
       use_filename: true,
       unique_filename: false, // Don't add random string
     };
