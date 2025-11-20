@@ -14,12 +14,12 @@ export const useTaskManagement = ({ currentUser, onTasksUpdated }: UseTaskParams
   const saveTask = useCallback(
     async (
       taskData: Omit<Task, 'id_task' | 'date_created'> & { id_task?: number },
-      descriptionFile?: File | null
+      descriptionFiles?: FileList | null
     ): Promise<Task | null> => {
       setIsLoading(true);
       setError(null);
       try {
-        const savedTask = await api.saveTask(taskData, descriptionFile, currentUser);
+        const savedTask = await api.saveTask(taskData, descriptionFiles, currentUser);
         onTasksUpdated?.(await api.getTasks());
         return savedTask;
       } catch (err) {
@@ -75,9 +75,31 @@ export const useTaskManagement = ({ currentUser, onTasksUpdated }: UseTaskParams
 
   const clearError = useCallback(() => setError(null), []);
 
+  const deleteAttachment = useCallback(
+    async (taskId: number, fileId: number): Promise<boolean> => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const success = await api.deleteAttachment(taskId, fileId);
+        if (success) {
+          onTasksUpdated?.(await api.getTasks());
+        }
+        return success;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to delete attachment';
+        setError(errorMsg);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [onTasksUpdated]
+  );
+
   return {
     saveTask,
     deleteTask,
+    deleteAttachment,
     submitTask,
     isLoading,
     error,

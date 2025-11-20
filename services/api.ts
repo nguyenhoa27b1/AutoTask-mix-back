@@ -204,12 +204,12 @@ export const api = {
     // TASK MANAGEMENT
     async saveTask(
         taskData: Omit<Task, 'id_task' | 'date_created'> & { id_task?: number },
-        descriptionFile: File | null,
+        descriptionFiles: FileList | null,
         currentUser: User,
     ): Promise<Task> {
         try {
-            // If there's a description file, send as FormData (multipart)
-            if (descriptionFile) {
+            // If there are description files, send as FormData (multipart)
+            if (descriptionFiles && descriptionFiles.length > 0) {
                 const formData = new FormData();
                 // Add task data as individual form fields
                 formData.append('title', taskData.title || '');
@@ -220,8 +220,11 @@ export const api = {
                 formData.append('assigner_id', String(taskData.assigner_id || currentUser.user_id));
                 formData.append('status', taskData.status || 'Pending');
                 if (taskData.id_task) formData.append('id_task', String(taskData.id_task));
-                // Add the file
-                formData.append('file', descriptionFile);
+                
+                // Add multiple files
+                for (let i = 0; i < descriptionFiles.length; i++) {
+                    formData.append('files', descriptionFiles[i]);
+                }
 
                 const headers: HeadersInit = {};
                 if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -252,6 +255,17 @@ export const api = {
             });
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to save task');
+        }
+    },
+
+    async deleteAttachment(taskId: number, fileId: number): Promise<boolean> {
+        try {
+            await fetchFromBackend<{ ok: boolean }>(`/tasks/${taskId}/attachments/${fileId}`, {
+                method: 'DELETE',
+            });
+            return true;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to delete attachment');
         }
     },
 
