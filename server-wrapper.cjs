@@ -19,8 +19,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Setup Cloudinary storage for multer
-const storage = new CloudinaryStorage({
+// Setup Cloudinary storage for multer (only for submit files)
+const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'autotask-uploads',
@@ -29,7 +29,11 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage });
+// Two upload instances:
+// 1. uploadToCloudinary - for submit files (saves to cloud)
+// 2. uploadToMemory - for description files (temporary, not saved)
+const uploadToCloudinary = multer({ storage: cloudinaryStorage });
+const uploadToMemory = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -824,7 +828,7 @@ app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   return res.json(mockTasks);
 });
 
-app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file'), async (req, res) => {
+app.post('/api/tasks', authenticate, checkDomainIsolation, uploadToMemory.single('file'), async (req, res) => {
   await sleep(150);
   const data = req.body;
   const file = req.file;
@@ -834,32 +838,20 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file')
     const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
     if (idx === -1) return res.status(404).json({ error: 'Task not found' });
 
-    // If a new description file was uploaded, save it to Cloudinary
+    // Description files are NOT saved (admin can re-upload anytime)
+    // Only store file metadata temporarily in memory
     if (file) {
-      try {
-        const newId = nextFileId++;
-        
-        // Cloudinary automatically uploads via multer CloudinaryStorage
-        console.log('✅ Description file uploaded to Cloudinary:', file.path);
-
-        const fileMeta = {
-          id_file: newId,
-          id_user: loggedInUser ? loggedInUser.user_id : 0,
-          name: file.originalname,
-          url: `/files/${newId}/download`,
-          cloudinary_url: file.path, // Cloudinary URL
-          cloudinary_id: file.filename, // Cloudinary public_id
-          file_type: file.mimetype,
-          file_size: file.size,
-        };
-        mockFiles.push(fileMeta);
-
-        // Link file to task (description file)
-        mockTasks[idx].id_file = newId;
-      } catch (e) {
-        console.error('Failed to save description file to Cloudinary:', e && e.message);
-        return res.status(500).json({ error: 'Failed to save description file' });
-      }
+      const newId = nextFileId++;
+      const fileMeta = {
+        id_file: newId,
+        id_user: loggedInUser ? loggedInUser.user_id : 0,
+        name: file.originalname,
+        url: null, // No download URL (file not saved)
+        file_type: file.mimetype,
+        file_size: file.size,
+      };
+      mockFiles.push(fileMeta);
+      mockTasks[idx].id_file = newId;
     }
 
     // Update task fields from form data (convert numeric strings)
@@ -880,28 +872,18 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, upload.single('file')
   const newTaskId = nextTaskId++;
   let descriptionFileId = null;
 
+  // Description files are NOT saved (admin can re-upload anytime)
   if (file) {
-    try {
-      descriptionFileId = nextFileId++;
-      
-      // Cloudinary automatically uploads via multer CloudinaryStorage
-      console.log('✅ Description file uploaded to Cloudinary:', file.path);
-
-      const fileMeta = {
-        id_file: descriptionFileId,
-        id_user: loggedInUser ? loggedInUser.user_id : 0,
-        name: file.originalname,
-        url: `/files/${descriptionFileId}/download`,
-        cloudinary_url: file.path, // Cloudinary URL
-        cloudinary_id: file.filename, // Cloudinary public_id
-        file_type: file.mimetype,
-        file_size: file.size,
-      };
-      mockFiles.push(fileMeta);
-    } catch (e) {
-      console.error('Failed to save description file to Cloudinary:', e && e.message);
-      return res.status(500).json({ error: 'Failed to save description file' });
-    }
+    descriptionFileId = nextFileId++;
+    const fileMeta = {
+      id_file: descriptionFileId,
+      id_user: loggedInUser ? loggedInUser.user_id : 0,
+      name: file.originalname,
+      url: null, // No download URL (file not saved)
+      file_type: file.mimetype,
+      file_size: file.size,
+    };
+    mockFiles.push(fileMeta);
   }
 
   const newTask = {
@@ -942,7 +924,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.single('file'), async (req, res) => {
+app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, uploadToCloudinary.single('file'), async (req, res) => {
   await sleep(200);
   const id = Number(req.params.id);
   const task = mockTasks.find((t) => t.id_task === id);
