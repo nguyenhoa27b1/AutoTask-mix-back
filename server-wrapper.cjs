@@ -672,8 +672,12 @@ app.post('/api/login/google', async (req, res) => {
   const domain = getDomainFromEmail(profile.email);
   let user = mockUsers.find((u) => u.email === profile.email);
   
-  // Special case: Auto-grant admin + whitelist for nguyenhoa27b1@gmail.com
-  const isAdminEmail = profile.email === 'nguyenhoa27b1@gmail.com';
+  // Special case: Auto-grant admin + whitelist for admin emails
+  const ADMIN_EMAILS = [
+    'nguyenhoa27b1@gmail.com',
+    // Thêm email admin khác ở đây
+  ];
+  const isAdminEmail = ADMIN_EMAILS.includes(profile.email);
   
   // Whitelist check for Gmail users (except admin email)
   if (domain === 'gmail.com') {
