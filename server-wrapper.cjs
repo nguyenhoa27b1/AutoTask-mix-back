@@ -950,7 +950,7 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
     id_task: newTaskId,
     title: data.title || 'Untitled',
     description: data.description || '',
-    assignee_id: Number(data.assignee_id) || 0,
+    assignee_id: Number(data.assignee_id) || currentUser.user_id, // Use current user if not provided
     assigner_id: Number(data.assigner_id) || (loggedInUser ? loggedInUser.user_id : 1),
     priority: Number(data.priority) || 2,
     deadline: data.deadline || new Date().toISOString(),
@@ -961,11 +961,18 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.arr
     score: null,
     status: data.status || 'Pending',
   };
+  
+  console.log('[POST /api/tasks] Creating task:', newTask);
   mockTasks.push(newTask);
 
   // Send email notification to assignee
   const assignee = mockUsers.find(u => u.user_id === newTask.assignee_id);
   const assigner = mockUsers.find(u => u.user_id === newTask.assigner_id) || loggedInUser;
+  console.log('[POST /api/tasks] Email notification:', { 
+    hasAssignee: !!assignee, 
+    hasAssigner: !!assigner 
+  });
+  
   if (assignee && assigner) {
     emailService.notifyTaskAssigned(newTask, assignee, assigner).catch(err => 
       console.error('[EMAIL] Failed to send task assignment notification:', err.message)
