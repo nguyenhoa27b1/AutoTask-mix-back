@@ -934,6 +934,10 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
   const task = mockTasks.find((t) => t.id_task === id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
   if (!req.file) return res.status(400).json({ error: 'File required' });
+  
+  // ⚠️ WARNING: Local file storage is EPHEMERAL on Render free tier!
+  // Files will be DELETED on every deployment or server restart.
+  // TODO: Migrate to cloud storage (AWS S3, Google Cloud Storage, Cloudinary)
   // Persist file to disk under uploads/ with unique name
   try {
     const fs = require('fs');
@@ -945,6 +949,8 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
     const safeName = `${Date.now()}-${newId}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const savedPath = path.join(uploadsDir, safeName);
     fs.writeFileSync(savedPath, req.file.buffer);
+    
+    console.log(`[UPLOAD] File saved to local disk: ${savedPath} (⚠️ EPHEMERAL - will be lost on Render restart!)`);
 
     const fileMeta = {
       id_file: newId,
@@ -1022,20 +1028,54 @@ app.get('/files/:id/download', (req, res) => {
   // If the file was saved to disk, stream it
   try {
     const fs = require('fs');
+    const path = require('path');
+    
     if (file.path && fs.existsSync(file.path)) {
-      res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
-      const stream = fs.createReadStream(file.path);
-      return stream.pipe(res);
+      console.log(`[DOWNLOAD] Serving file: ${file.name} from path: ${file.path}`);
+      
+      // Set proper headers for download
+      const ext = path.extname(file.name).toLowerCase();
+      const mimeTypes = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.txt': 'text/plain',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.zip': 'application/zip',
+      };
+      
+      const contentType = mimeTypes[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
+      
+      // Use res.download() for better file serving
+      return res.download(file.path, file.name, (err) => {
+        if (err) {
+          console.error('[DOWNLOAD] Error sending file:', err.message);
+          if (!res.headersSent) {
+            return res.status(500).json({ error: 'Failed to download file' });
+          }
+        }
+      });
     }
+    
     // Fallback: if buffer exists (older entries), send it
     if (file.buffer) {
-      res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+      console.log(`[DOWNLOAD] Serving file from buffer: ${file.name}`);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
       return res.send(file.buffer);
     }
+    
+    console.warn(`[DOWNLOAD] File not found on disk or buffer: ${file.name}`);
     res.setHeader('Content-Type', 'text/plain');
-    return res.send(`Placeholder for ${file.name}`);
+    return res.status(404).send(`File not found: ${file.name}`);
   } catch (e) {
-    console.error('Error serving file:', e && e.message);
+    console.error('[DOWNLOAD] Error serving file:', e && e.message);
     return res.status(500).json({ error: 'Failed to serve file' });
   }
 });
