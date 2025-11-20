@@ -55,8 +55,8 @@ const submitStorage = new CloudinaryStorage({
 });
 
 // Three upload instances:
-// 1. uploadDescription - for description files (saves to autotask-descriptions)
-// 2. uploadSubmission - for submit files (saves to autotask-submissions)
+// 1. uploadDescription - for description files (saves to autotask-descriptions) - MULTIPLE FILES
+// 2. uploadSubmission - for submit files (saves to autotask-submissions) - SINGLE FILE
 // 3. uploadToMemory - for temporary files (not saved)
 const uploadDescription = multer({ storage: descriptionStorage });
 const uploadSubmission = multer({ storage: submitStorage });
@@ -852,36 +852,52 @@ app.delete('/api/users/:id', async (req, res) => {
 // --- Tasks ---
 app.get('/api/tasks', filterByDomain('tasks'), async (req, res) => {
   await sleep(100);
-  return res.json(mockTasks);
+  // Populate attachment_ids with full file objects
+  const tasksWithAttachments = mockTasks.map(task => {
+    const attachments = (task.attachment_ids || [])
+      .map(fileId => mockFiles.find(f => f.id_file === fileId))
+      .filter(Boolean); // Remove undefined
+    
+    return {
+      ...task,
+      attachments, // Add full file objects array
+    };
+  });
+  return res.json(tasksWithAttachments);
 });
 
-app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.single('file'), async (req, res) => {
+app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.array('files', 10), async (req, res) => {
   await sleep(150);
   const data = req.body;
-  const file = req.file;
+  const files = req.files || []; // Multiple files
 
   if (data.id_task) {
     // Update existing task
     const idx = mockTasks.findIndex((t) => t.id_task === data.id_task);
     if (idx === -1) return res.status(404).json({ error: 'Task not found' });
 
-    // Save description file to Cloudinary (autotask-descriptions folder)
-    if (file) {
-      const newId = nextFileId++;
-      console.log('✅ Description file uploaded to Cloudinary:', file.path);
-      
-      const fileMeta = {
-        id_file: newId,
-        id_user: loggedInUser ? loggedInUser.user_id : 0,
-        name: file.originalname,
-        url: `/files/${newId}/download`,
-        cloudinary_url: file.path,
-        cloudinary_id: file.filename,
-        file_type: file.mimetype,
-        file_size: file.size,
-      };
-      mockFiles.push(fileMeta);
-      mockTasks[idx].id_file = newId;
+    // Save multiple description files to Cloudinary
+    if (files.length > 0) {
+      const newFileIds = [];
+      for (const file of files) {
+        const newId = nextFileId++;
+        console.log('✅ Description file uploaded to Cloudinary:', file.path);
+        
+        const fileMeta = {
+          id_file: newId,
+          id_user: loggedInUser ? loggedInUser.user_id : 0,
+          name: file.originalname,
+          url: `/files/${newId}/download`,
+          cloudinary_url: file.path,
+          cloudinary_id: file.filename,
+          file_type: file.mimetype,
+          file_size: file.size,
+        };
+        mockFiles.push(fileMeta);
+        newFileIds.push(newId);
+      }
+      // Append new file IDs to existing attachment_ids
+      mockTasks[idx].attachment_ids = [...(mockTasks[idx].attachment_ids || []), ...newFileIds];
     }
 
     // Update task fields from form data (convert numeric strings)
@@ -900,24 +916,27 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.sin
 
   // Create new task
   const newTaskId = nextTaskId++;
-  let descriptionFileId = null;
+  const attachmentIds = [];
 
-  // Save description file to Cloudinary (autotask-descriptions folder)
-  if (file) {
-    descriptionFileId = nextFileId++;
-    console.log('✅ Description file uploaded to Cloudinary:', file.path);
-    
-    const fileMeta = {
-      id_file: descriptionFileId,
-      id_user: loggedInUser ? loggedInUser.user_id : 0,
-      name: file.originalname,
-      url: `/files/${descriptionFileId}/download`,
-      cloudinary_url: file.path,
-      cloudinary_id: file.filename,
-      file_type: file.mimetype,
-      file_size: file.size,
-    };
-    mockFiles.push(fileMeta);
+  // Save multiple description files to Cloudinary (autotask-descriptions folder)
+  if (files.length > 0) {
+    for (const file of files) {
+      const fileId = nextFileId++;
+      console.log('✅ Description file uploaded to Cloudinary:', file.path);
+      
+      const fileMeta = {
+        id_file: fileId,
+        id_user: loggedInUser ? loggedInUser.user_id : 0,
+        name: file.originalname,
+        url: `/files/${fileId}/download`,
+        cloudinary_url: file.path,
+        cloudinary_id: file.filename,
+        file_type: file.mimetype,
+        file_size: file.size,
+      };
+      mockFiles.push(fileMeta);
+      attachmentIds.push(fileId);
+    }
   }
 
   const newTask = {
@@ -930,7 +949,7 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, uploadDescription.sin
     deadline: data.deadline || new Date().toISOString(),
     date_created: new Date().toISOString(),
     date_submit: null,
-    id_file: descriptionFileId,
+    attachment_ids: attachmentIds, // Array of description file IDs
     submit_file_id: null,
     score: null,
     status: data.status || 'Pending',
@@ -966,6 +985,50 @@ app.delete('/api/tasks/:id', async (req, res) => {
   
   mockTasks.splice(idx, 1);
   return res.json({ ok: true });
+});
+
+// DELETE attachment file from task
+app.delete('/api/tasks/:taskId/attachments/:fileId', authenticate, async (req, res) => {
+  try {
+    const taskId = Number(req.params.taskId);
+    const fileId = Number(req.params.fileId);
+    
+    // Find task
+    const task = mockTasks.find((t) => t.id_task === taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    
+    // Check if task is completed or submitted (prevent deletion)
+    if (task.status === 'Completed' || task.status === 'submitted') {
+      return res.status(403).json({ 
+        error: 'Cannot delete attachments from completed/submitted tasks',
+        message: 'Files from completed tasks are protected for record keeping.'
+      });
+    }
+    
+    // Find file
+    const file = mockFiles.find(f => f.id_file === fileId);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    
+    // Delete from Cloudinary
+    if (file.cloudinary_id) {
+      await cloudinary.uploader.destroy(file.cloudinary_id, { resource_type: 'raw' });
+      console.log(`✅ Deleted file from Cloudinary: ${file.cloudinary_id}`);
+    }
+    
+    // Remove from mockFiles array
+    const fileIdx = mockFiles.findIndex(f => f.id_file === fileId);
+    if (fileIdx !== -1) mockFiles.splice(fileIdx, 1);
+    
+    // Remove from task.attachment_ids
+    if (task.attachment_ids) {
+      task.attachment_ids = task.attachment_ids.filter(id => id !== fileId);
+    }
+    
+    return res.json({ ok: true, message: 'File deleted successfully' });
+  } catch (error) {
+    console.error('[DELETE FILE] Error:', error);
+    return res.status(500).json({ error: 'Failed to delete file', details: error.message });
+  }
 });
 
 app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, uploadSubmission.single('file'), async (req, res) => {

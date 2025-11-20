@@ -12,11 +12,12 @@ interface TaskModalProps {
   files: AppFile[];
   onSave: (
     task: Omit<Task, 'id_task' | 'date_created'> & { id_task?: number },
-    descriptionFile?: File | null
+    descriptionFiles?: FileList | null
   ) => void;
   onDelete: (taskId: number) => void;
   onSubmitTask: (taskId: number, file: File) => void;
   onOpenFile: (fileId: number) => void;
+  onDeleteAttachment?: (taskId: number, fileId: number) => void;
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({
@@ -30,19 +31,20 @@ const TaskModal: React.FC<TaskModalProps> = ({
   onDelete,
   onSubmitTask,
   onOpenFile,
+  onDeleteAttachment,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [priority, setPriority] = useState<Priority>(Priority.MEDIUM);
   const [assigneeId, setAssigneeId] = useState<number>(currentUser.user_id);
-  const [descriptionFile, setDescriptionFile] = useState<File | null>(null);
+  const [descriptionFiles, setDescriptionFiles] = useState<FileList | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [canEdit, setCanEdit] = useState(false);
 
   const isNewTask = task === null;
   const isAdmin = currentUser.role === Role.ADMIN;
-  const isCompleted = task?.status === 'Completed';
+  const isCompleted = task?.status === 'Completed' || task?.status === 'submitted';
   const canDelete = task && (isAdmin || task.assigner_id === currentUser.user_id) && !isCompleted;
 
   useEffect(() => {
@@ -64,7 +66,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       setPriority(Priority.MEDIUM);
       setAssigneeId(currentUser.user_id);
     }
-    setDescriptionFile(null);
+    setDescriptionFiles(null);
     setSubmissionFile(null);
   }, [task, isOpen, currentUser]);
   
@@ -86,7 +88,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       assigner_id: task ? task.assigner_id : currentUser.user_id,
       status: task ? task.status : 'Pending',
     };
-    onSave(savedTask, descriptionFile);
+    onSave(savedTask, descriptionFiles);
   };
   
   const handleSubmit = () => {
@@ -98,8 +100,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const handleDescriptionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setDescriptionFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      setDescriptionFiles(e.target.files);
     }
   };
 
@@ -119,10 +121,19 @@ const TaskModal: React.FC<TaskModalProps> = ({
     return files.find(f => f.id_file === fileId);
   }
 
-  const descriptionFileDetails = findFileById(task?.id_file);
   const submissionFileDetails = findFileById(task?.submit_file_id);
   const assigner = findUserById(task?.assigner_id);
   const assignee = findUserById(task?.assignee_id);
+  
+  // Get attachments from task (populated from backend)
+  const taskAttachments = task?.attachments || [];
+  
+  const handleDeleteAttachment = async (fileId: number) => {
+    if (!task || !onDeleteAttachment) return;
+    if (confirm('Are you sure you want to delete this file?')) {
+      onDeleteAttachment(task.id_task, fileId);
+    }
+  };
   
   const commonInputClasses = "mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 dark:text-gray-100";
   const disabledInputClasses = "disabled:bg-gray-200 dark:disabled:bg-gray-700/50 disabled:cursor-not-allowed disabled:text-gray-500";
@@ -149,22 +160,48 @@ const TaskModal: React.FC<TaskModalProps> = ({
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} disabled={!canEdit} className={`${commonInputClasses} ${disabledInputClasses}`}></textarea>
           </div>
            <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Attach Description File</label>
-            {descriptionFileDetails && !descriptionFile && (
-              <div className="mt-1 text-sm">
-                <span>Current file: </span>
-                <a href="#" onClick={(e) => { e.preventDefault(); onOpenFile(descriptionFileDetails.id_file); }} className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
-                  {descriptionFileDetails.name}
-                </a>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Attach Description Files</label>
+            
+            {/* Display existing attachments */}
+            {taskAttachments.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Current files:</span>
+                {taskAttachments.map((file) => (
+                  <div key={file.id_file} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                    <a 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); onOpenFile(file.id_file); }} 
+                      className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline text-sm"
+                    >
+                      {file.name}
+                    </a>
+                    {canEdit && !isCompleted && (
+                      <button
+                        onClick={() => handleDeleteAttachment(file.id_file)}
+                        className="ml-2 text-red-500 hover:text-red-700"
+                        title="Delete file"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
+            
+            {/* Upload new files */}
             <input
               type="file"
+              multiple
               onChange={handleDescriptionFileChange}
               disabled={!canEdit}
               className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/50 dark:file:text-indigo-300 dark:hover:file:bg-indigo-900 disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            {descriptionFile && <p className="text-xs mt-1 text-gray-500">New file selected: {descriptionFile.name}</p>}
+            {descriptionFiles && descriptionFiles.length > 0 && (
+              <p className="text-xs mt-1 text-gray-500">
+                {descriptionFiles.length} file(s) selected
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

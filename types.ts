@@ -36,10 +36,11 @@ export interface Task {
   deadline: string; // ISO string date
   date_created: string; // ISO string date
   date_submit?: string | null;
-  id_file?: number | null;
+  attachment_ids?: number[]; // Array of description file IDs
+  attachments?: AppFile[]; // Populated from backend
   submit_file_id?: number | null;
   score?: number | null;
-  status: 'Pending' | 'Completed';
+  status: 'Pending' | 'Completed' | 'submitted';
 }
 
 export interface GoogleProfile {

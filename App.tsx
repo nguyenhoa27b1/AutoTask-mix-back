@@ -289,6 +289,7 @@ const App: React.FC = () => {
                 onDelete={handleDeleteTask}
                 onSubmitTask={handleSubmitTask}
                 onOpenFile={handleOpenFile}
+                onDeleteAttachment={taskMgmt.deleteAttachment}
             />
             <UserTasksModal
                 isOpen={isUserTasksModalOpen}
