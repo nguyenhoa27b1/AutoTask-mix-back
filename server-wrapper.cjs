@@ -25,7 +25,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: 'autotask-uploads',
     resource_type: 'auto', // Allows any file type
-    allowed_formats: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'jpeg', 'png', 'xlsx', 'xls', 'zip'],
+    // Remove allowed_formats to accept ALL file types
   },
 });
 
