@@ -243,7 +243,7 @@ const emailService = {
           <ul style="list-style: none; padding: 0;">
             <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
             <li>⏰ <b>Thời gian nộp:</b> ${new Date().toLocaleString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
-            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })} (23:59)</li>
           </ul>
         </div>
         <p style="color: #c0392b; font-weight: bold;">⚠️ Lưu ý: Task này đã bị trừ điểm (-1) theo quy tắc quá hạn.</p>
@@ -514,7 +514,7 @@ function calcScoreForSubmission(task, file) {
     deadlineDate = new Date(task.deadline);
   }
 
-  // Normalize dates to compare day-by-day, ignoring time
+  // Normalize dates to compare day-by-day (deadline is until 23:59:59 of that day)
   const submissionDay = new Date(submissionDate.getFullYear(), submissionDate.getMonth(), submissionDate.getDate());
   const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
   
@@ -525,13 +525,13 @@ function calcScoreForSubmission(task, file) {
     console.log('[SCORE_DEBUG] unable to stringify dates', e && e.message);
   }
 
-  // Scoring: +1 early, 0 on-time, -1 late
+  // Scoring: +1 early, 0 on-time (deadline day until 23:59), -1 late
   const subTime = submissionDay.getTime();
   const dlTime = deadlineDay.getTime();
   if (subTime < dlTime) {
     return 1; // Completed before deadline
   } else if (subTime === dlTime) {
-    return 0; // Completed on the deadline
+    return 0; // Completed on the deadline day (until 23:59:59)
   } else {
     return -1; // Completed after deadline
   }
@@ -935,8 +935,10 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, upload.sin
     const admins = mockUsers.filter(u => u.role === Role.ADMIN);
     
     if (submitter && assigner) {
-      // Check if submission is after deadline
+      // Check if submission is after deadline (deadline is until 23:59:59.999 of that day)
       const deadlineDate = new Date(task.deadline);
+      // Set deadline to end of day (23:59:59.999)
+      deadlineDate.setHours(23, 59, 59, 999);
       const isOverdue = submissionTime > deadlineDate;
       
       if (isOverdue) {
