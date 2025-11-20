@@ -1187,7 +1187,17 @@ app.post('/api/tasks/:id/submit', authenticate, checkDomainIsolation, uploadSubm
       console.warn('⚠️ [EMAIL] Cannot send task submission email - missing submitter or assigner');
     }
 
-    return res.json({ task, file: { id_file: fileMeta.id_file, name: fileMeta.name, url: fileMeta.url } });
+    // ✅ Populate attachments array before returning (just like GET /api/tasks)
+    const attachments = (task.attachment_ids || [])
+      .map(fileId => mockFiles.find(f => f.id_file === fileId))
+      .filter(Boolean);
+    
+    const taskWithAttachments = {
+      ...task,
+      attachments
+    };
+
+    return res.json({ task: taskWithAttachments, file: { id_file: fileMeta.id_file, name: fileMeta.name, url: fileMeta.url } });
   } catch (e) {
     console.error('Failed to persist uploaded file:', e && e.message);
     return res.status(500).json({ error: 'Failed to save file' });
