@@ -953,7 +953,13 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
       mockTasks[idx] = { ...mockTasks[idx], ...taskUpdate };
       
       console.log('[POST /api/tasks] Task updated successfully:', mockTasks[idx].id_task);
-      return res.json(mockTasks[idx]);
+      
+      // ✅ Populate attachments array before returning
+      const attachments = (mockTasks[idx].attachment_ids || [])
+        .map(fileId => mockFiles.find(f => f.id_file === fileId))
+        .filter(Boolean);
+      
+      return res.json({ ...mockTasks[idx], attachments });
     }
 
     // Create new task
@@ -1049,7 +1055,13 @@ app.post('/api/tasks', authenticate, checkDomainIsolation, (req, res, next) => {
     }
 
     console.log('[POST /api/tasks] Task created successfully:', newTask.id_task);
-    return res.json(newTask);
+    
+    // ✅ Populate attachments array before returning
+    const attachments = (newTask.attachment_ids || [])
+      .map(fileId => mockFiles.find(f => f.id_file === fileId))
+      .filter(Boolean);
+    
+    return res.json({ ...newTask, attachments });
     
   } catch (error) {
     console.error('[POST /api/tasks] TASK CREATION CRASH:', error);
