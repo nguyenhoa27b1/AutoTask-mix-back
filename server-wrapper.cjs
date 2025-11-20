@@ -49,7 +49,7 @@ const emailTransporter = nodemailer.createTransport({
 
 // Email helper functions
 const emailService = {
-  // Format date for email display
+  // Format date for email display (GMT+7)
   formatDate(dateString) {
     const date = new Date(dateString);
     return date.toLocaleString('vi-VN', { 
@@ -57,7 +57,8 @@ const emailService = {
       month: 'long', 
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh'
     });
   },
 
@@ -135,7 +136,7 @@ const emailService = {
             <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
             <li>📝 <b>Mô tả:</b> ${task.description || 'Không có mô tả'}</li>
             <li>👤 <b>Người giao:</b> ${assigner.name || assigner.email}</li>
-            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
           </ul>
         </div>
         <p>Vui lòng đăng nhập vào hệ thống để kiểm tra và thực hiện ngay.</p>
@@ -159,7 +160,7 @@ const emailService = {
         <div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #27ae60;">
           <ul style="list-style: none; padding: 0;">
             <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
-            <li>⏰ <b>Thời gian nộp:</b> ${new Date(task.date_submit || Date.now()).toLocaleString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>⏰ <b>Thời gian nộp:</b> ${new Date(task.date_submit || Date.now()).toLocaleString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
             <li>🎯 <b>Điểm số:</b> ${task.score !== null ? task.score : 'Chưa chấm'}</li>
           </ul>
         </div>
@@ -190,7 +191,7 @@ const emailService = {
         <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #f1c40f;">
           <ul style="list-style: none; padding: 0;">
             <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
-            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>📅 <b>Hạn chót:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
             <li>⏰ <b>Thời gian còn lại:</b> Chưa đầy 24 giờ</li>
           </ul>
         </div>
@@ -215,7 +216,7 @@ const emailService = {
         <div style="background: #f2dede; padding: 15px; border-left: 4px solid #c0392b;">
           <ul style="list-style: none; padding: 0;">
             <li>📌 <b>Nhiệm vụ:</b> ${task.title}</li>
-            <li>📅 <b>Hạn chót đã qua:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+            <li>📅 <b>Hạn chót đã qua:</b> ${new Date(task.deadline).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</li>
             <li>⏱️ <b>Đã quá hạn:</b> 1 ngày</li>
           </ul>
         </div>
@@ -677,7 +678,7 @@ app.get('/api/debug/test-email', async (req, res) => {
       process.env.GMAIL_USER || 'test@example.com',
       '[TEST] Production Email Test',
       `<h1>✅ Test from Production Server</h1>
-       <p>Sent at: ${new Date().toLocaleString()}</p>
+       <p>Sent at: ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
        <p>Server time: ${Date.now()}</p>`
     );
     res.json({ success: true, result: testResult, timestamp: new Date().toISOString() });
