@@ -260,6 +260,32 @@ const emailService = {
     for (const admin of admins) {
       await this.sendEmail(admin.email, subject, html);
     }
+  },
+
+  // Chào mừng user mới (Onboarding)
+  async notifyNewUser(user) {
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://autotask-mix-back.onrender.com';
+    const subject = `[AutoTask] 🎉 Chào mừng bạn đến với hệ thống quản lý nhiệm vụ`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h3 style="color: #3498db;">Xin chào ${user.name || user.email},</h3>
+        <p>Bạn đã được Admin thêm vào hệ thống quản lý nhiệm vụ nội bộ <b>AutoTask</b>.</p>
+        <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #3498db; margin: 20px 0;">
+          <p style="margin: 5px 0;"><b>🔑 Thông tin đăng nhập:</b></p>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Email: <b>${user.email}</b></li>
+            <li>Đăng nhập bằng Google (dành cho email @gmail.com) hoặc email/mật khẩu</li>
+          </ul>
+        </div>
+        <p>Hãy truy cập vào hệ thống ngay để bắt đầu nhận nhiệm vụ!</p>
+        <p style="text-align: center; margin: 25px 0;">
+          <a href="${FRONTEND_URL}" style="background: #2ecc71; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">🚀 Đăng Nhập Ngay</a>
+        </p>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #7f8c8d;">Trân trọng,<br>Ban Quản Trị AutoTask</p>
+      </div>
+    `;
+    await this.sendEmail(user.email, subject, html);
   }
 };
 
@@ -745,6 +771,12 @@ app.post('/api/users', async (req, res) => {
   if (isGmail) {
     console.log('✅ [WHITELIST] Gmail user added and whitelisted:', email);
   }
+  
+  // ✅ Send welcome email to new user
+  console.log(`📧 [EMAIL] Sending welcome email to new user: ${user.email}`);
+  emailService.notifyNewUser(user).catch(err => 
+    console.error('[EMAIL] Failed to send welcome email:', err.message)
+  );
   
   return res.json(sanitizeUser(user));
 });
