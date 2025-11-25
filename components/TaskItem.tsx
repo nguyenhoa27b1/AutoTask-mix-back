@@ -9,21 +9,27 @@ interface TaskItemProps {
   task: Task;
   assignee?: User;
   onSelectTask: (task: Task) => void;
+  isOverdue?: boolean;
 }
 
-const TaskItem: React.FC<TaskItemProps> = memo(({ task, assignee, onSelectTask }) => {
-  const isTaskOverdue = isOverdue(task);
+const TaskItem: React.FC<TaskItemProps> = memo(({ task, assignee, onSelectTask, isOverdue: isOverdueProp }) => {
+  const isTaskOverdue = isOverdueProp || isOverdue(task) || task.isOverdue || task.status === 'Overdue';
   const priorityConfig = PRIORITY_CONFIG[task.priority];
 
   return (
     <div
       onClick={() => onSelectTask(task)}
-      className={`p-4 rounded-lg shadow-md cursor-pointer transition-transform transform hover:scale-105 border-l-4 ${
-        isTaskOverdue ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50' : priorityConfig.border
+      className={`p-4 rounded-lg shadow-md cursor-pointer transition-transform transform hover:scale-105 border-l-4 relative ${
+        isTaskOverdue ? 'border-red-500 bg-red-50 dark:bg-red-900/30' : priorityConfig.border
       } ${isTaskOverdue ? '' : priorityConfig.bg}`}
     >
+      {isTaskOverdue && (
+        <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+          OVERDUE
+        </div>
+      )}
       <div className="flex justify-between items-start">
-        <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{task.title}</h3>
+        <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100 pr-20">{task.title}</h3>
         <span
           className={`px-2 py-1 text-xs font-semibold rounded-full ${priorityConfig.bg} ${priorityConfig.text}`}
         >
@@ -34,7 +40,7 @@ const TaskItem: React.FC<TaskItemProps> = memo(({ task, assignee, onSelectTask }
       <div className="mt-4 flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
         <div>
           <span>Deadline: </span>
-          <span className={`font-medium ${isTaskOverdue ? 'text-pink-600 dark:text-pink-400' : 'text-gray-700 dark:text-gray-200'}`}>
+          <span className={`font-medium ${isTaskOverdue ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>
             {formatDate(task.deadline)}
           </span>
         </div>

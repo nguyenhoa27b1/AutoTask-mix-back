@@ -1,4 +1,4 @@
-import { User, Task, Role, AppFile, Priority, GoogleProfile } from '../types';
+import { User, Task, Role, AppFile, Priority, GoogleProfile, LeaveRequest, LeaveRequestStatus } from '../types';
 
 // Backend API base URL
 // In production (same domain), use relative path '/api'
@@ -178,11 +178,12 @@ export const api = {
         }
     },
 
-    async getTasks(): Promise<Task[]> {
+    async getTasks(page: number = 1, limit: number = 15): Promise<{ tasks: Task[], pagination: any }> {
         try {
-            return await fetchFromBackend<Task[]>('/tasks', {
+            const response = await fetchFromBackend<{ tasks: Task[], pagination: any }>(`/tasks?page=${page}&limit=${limit}`, {
                 method: 'GET',
             });
+            return response;
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to fetch tasks');
         }
@@ -377,5 +378,67 @@ export const api = {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
-    }
+    },
+
+    // LEAVE REQUESTS
+    async getLeaveRequests(): Promise<LeaveRequest[]> {
+        try {
+            return await fetchFromBackend<LeaveRequest[]>('/leave-requests', {
+                method: 'GET',
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to fetch leave requests');
+        }
+    },
+
+    async createLeaveRequest(startDate: string, endDate: string, reason: string): Promise<LeaveRequest> {
+        try {
+            return await fetchFromBackend<LeaveRequest>('/leave-requests', {
+                method: 'POST',
+                body: JSON.stringify({ start_date: startDate, end_date: endDate, reason }),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to create leave request');
+        }
+    },
+
+    async approveLeaveRequest(leaveId: number, notes?: string): Promise<LeaveRequest> {
+        try {
+            return await fetchFromBackend<LeaveRequest>(`/leave-requests/${leaveId}/approve`, {
+                method: 'PUT',
+                body: JSON.stringify({ notes: notes || '' }),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to approve leave request');
+        }
+    },
+
+    async rejectLeaveRequest(leaveId: number, notes?: string): Promise<LeaveRequest> {
+        try {
+            return await fetchFromBackend<LeaveRequest>(`/leave-requests/${leaveId}/reject`, {
+                method: 'PUT',
+                body: JSON.stringify({ notes: notes || '' }),
+            });
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to reject leave request');
+        }
+    },
+
+    async deleteLeaveRequest(leaveId: number): Promise<boolean> {
+        try {
+            await fetchFromBackend<{ ok: boolean }>(`/leave-requests/${leaveId}`, {
+                method: 'DELETE',
+            });
+            return true;
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to delete leave request');
+        }
+    },
 };
+
+// Export leave request functions for direct import
+export const getLeaveRequests = api.getLeaveRequests;
+export const createLeaveRequest = api.createLeaveRequest;
+export const approveLeaveRequest = api.approveLeaveRequest;
+export const rejectLeaveRequest = api.rejectLeaveRequest;
+export const deleteLeaveRequest = api.deleteLeaveRequest;

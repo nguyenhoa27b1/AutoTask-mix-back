@@ -17,6 +17,12 @@ export interface User {
   name: string;            // Required - sanitizeUser ensures non-null string
   picture: string;         // Required - sanitizeUser ensures non-null string (empty if no picture)
   isWhitelisted?: boolean; // Optional - only relevant for Gmail users
+  // Statistics fields
+  totalTasksAssigned?: number;      // Total number of tasks assigned to this user
+  totalTasksCompleted?: number;     // Number of completed tasks
+  averageScore?: number;            // Average score of completed tasks
+  tasksCompletedOnTime?: number;    // Tasks completed before deadline
+  tasksCompletedLate?: number;      // Tasks completed after deadline
 }
 
 export interface AppFile {
@@ -40,7 +46,8 @@ export interface Task {
   attachments?: AppFile[]; // Populated from backend
   submit_file_id?: number | null;
   score?: number | null;
-  status: 'Pending' | 'Completed' | 'submitted';
+  status: 'Pending' | 'Overdue' | 'Submitted' | 'Completed';
+  isOverdue?: boolean; // Computed field - true if past deadline and not completed
 }
 
 export interface GoogleProfile {
@@ -51,4 +58,26 @@ export interface GoogleProfile {
   given_name: string;
   family_name: string;
   sub: string;
+}
+
+export enum LeaveRequestStatus {
+  PENDING = 'Pending',
+  APPROVED = 'Approved',
+  REJECTED = 'Rejected',
+}
+
+export interface LeaveRequest {
+  id_leave: number;
+  user_id: number;
+  user_name?: string;        // Populated from user data
+  user_email?: string;       // Populated from user data
+  start_date: string;        // ISO string date
+  end_date: string;          // ISO string date
+  reason: string;
+  status: LeaveRequestStatus;
+  date_created: string;      // ISO string date
+  date_reviewed?: string | null;  // ISO string date when approved/rejected
+  reviewed_by?: number | null;    // Admin user_id who reviewed
+  reviewer_name?: string;    // Populated from admin data
+  notes?: string | null;     // Admin notes when reviewing
 }

@@ -81,7 +81,19 @@ const UserManagement: React.FC<UserManagementProps> = memo(
                   Role
                 </th>
                 <th scope="col" className="px-6 py-3">
-                  Score
+                  Total Tasks
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  Completed
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  Avg Score
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  On Time
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  Late
                 </th>
                 <th scope="col" className="px-6 py-3">
                   Actions
@@ -108,8 +120,28 @@ const UserManagement: React.FC<UserManagementProps> = memo(
                       <option value={Role.ADMIN}>Admin</option>
                     </select>
                   </td>
-                  <td className="px-6 py-4 font-bold text-lg text-indigo-600 dark:text-indigo-400">
-                    {user.score ?? 0}
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-semibold">
+                      {user.totalTasksAssigned ?? 0}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 font-semibold">
+                      {user.totalTasksCompleted ?? 0}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center font-bold text-lg text-indigo-600 dark:text-indigo-400">
+                    {user.averageScore ? user.averageScore.toFixed(1) : '0.0'}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-semibold">
+                      {user.tasksCompletedOnTime ?? 0}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 font-semibold">
+                      {user.tasksCompletedLate ?? 0}
+                    </span>
                   </td>
                   <td className="px-6 py-4 flex items-center space-x-4">
                     <button

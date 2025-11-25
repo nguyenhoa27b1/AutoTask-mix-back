@@ -9,8 +9,6 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +32,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
         
         if (!success) {
             console.error('❌ [GOOGLE LOGIN] Login failed - success is false');
-            setError("Google Sign-In failed. Your account may not be registered.");
+            setError("Access denied. Your email is not authorized to use this system.");
         } else {
             console.log('🎉 [GOOGLE LOGIN] Login successful!');
         }
@@ -81,45 +79,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
     // google.accounts.id.prompt(); // Optional: display the One Tap prompt
   }, [VITE_GOOGLE_CLIENT_ID]);
 
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    
-    console.log('═══════════════════════════════════════════');
-    console.log('🔐 [LOGIN] Form submission started');
-    console.log('📧 Email:', email);
-    console.log('🌐 Current URL:', window.location.href);
-    console.log('🖥️  User Agent:', navigator.userAgent);
-    console.log('═══════════════════════════════════════════');
-    
-    try {
-        console.log('⏳ [LOGIN] Calling onLogin function...');
-        const success = await onLogin(email, password);
-        console.log('✅ [LOGIN] onLogin returned:', success);
-        
-        if (!success) {
-            console.error('❌ [LOGIN] Login failed - success is false');
-            setError("Login Failed: User not found or incorrect password.");
-        } else {
-            console.log('🎉 [LOGIN] Login successful!');
-        }
-    } catch (err) {
-        console.error('💥 [LOGIN] Exception caught:', err);
-        console.error('Error details:', {
-            message: (err as Error).message,
-            name: (err as Error).name,
-            stack: (err as Error).stack
-        });
-        setError((err as Error).message || "An unexpected error occurred.");
-    } finally {
-        setLoading(false);
-        console.log('🏁 [LOGIN] Login process completed');
-        console.log('═══════════════════════════════════════════\n');
-    }
-  };
-  
   const commonInputClasses = "appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100";
 
   return (
@@ -127,53 +86,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
       <div className="max-w-md w-full bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-8 space-y-8">
         <div className="text-center">
             <h1 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">TaskFlow</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to your account</p>
-        </div>
-        
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
-            <div className="mt-1">
-              <input 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
-                className={commonInputClasses}
-                placeholder="you@example.com"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-            <div className="mt-1">
-              <input 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-                className={commonInputClasses}
-                placeholder="Password"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-wait"
-            >
-              {loading ? 'Processing...' : 'Sign in'}
-            </button>
-          </div>
-        </form>
-
-        <div className="relative flex items-center">
-            <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
-            <span className="flex-shrink mx-4 text-xs text-gray-500 dark:text-gray-400">Or continue with</span>
-            <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in with your Google account</p>
         </div>
         
         <div className="w-full">
@@ -185,24 +98,30 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoogleLogin }) => {
                 </div>
             )}
         </div>
-        
-        <div className="p-4 bg-indigo-50 dark:bg-gray-700/50 border border-indigo-200 dark:border-gray-600 rounded-lg text-sm">
-            <p className="font-semibold text-indigo-800 dark:text-indigo-200">For Demo Purposes</p>
-            <ul className="list-disc list-inside mt-2 space-y-1 text-gray-700 dark:text-gray-300">
-                <li><strong>Admin:</strong> admin@example.com / <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1 rounded">adminpassword</span></li>
-                <li><strong>User:</strong> user@example.com / <span className="font-mono bg-gray-200 dark:bg-gray-600 px-1 rounded">userpassword</span></li>
-            </ul>
+
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm">
+                <p className="font-semibold text-blue-800 dark:text-blue-200 mb-1">Authorized Access Only</p>
+                <p className="text-blue-700 dark:text-blue-300">
+                  Only authorized email addresses can access this system. If you don't have access, please contact your administrator.
+                </p>
+              </div>
+            </div>
         </div>
 
         {error && (
-            <div className="text-center">
-                <p className="text-sm text-red-500">{error}</p>
+            <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg">
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
         )}
 
-        <div className="text-sm text-center pt-2">
+        <div className="text-sm text-center pt-2 border-t border-gray-200 dark:border-gray-700">
             <p className="text-gray-600 dark:text-gray-400">
-              Need an account? Please contact an administrator.
+              Need access? Contact your system administrator to add your email to the whitelist.
             </p>
         </div>
       </div>

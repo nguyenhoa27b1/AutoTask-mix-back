@@ -40,22 +40,24 @@ const App: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [files, setFiles] = useState<AppFile[]>([]);
+    const [pagination, setPagination] = useState<any>({ page: 1, limit: 15, total: 0, totalPages: 0, hasMore: false });
     const [isAppLoading, setIsAppLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isUserTasksModalOpen, setIsUserTasksModalOpen] = useState(false);
     const [viewingUser, setViewingUser] = useState<User | null>(null);
 
-    const fetchAppData = useCallback(async () => {
+    const fetchAppData = useCallback(async (page: number = 1) => {
         setIsAppLoading(true);
         try {
-            const [usersData, tasksData, filesData] = await Promise.all([
+            const [usersData, tasksResponse, filesData] = await Promise.all([
                 api.getUsers(),
-                api.getTasks(),
+                api.getTasks(page, 15),
                 api.getFiles()
             ]);
             setUsers(usersData);
-            setTasks(tasksData);
+            setTasks(tasksResponse.tasks);
+            setPagination(tasksResponse.pagination);
             setFiles(filesData);
         } catch (error) {
             console.error("Failed to fetch app data", error);
@@ -226,16 +228,19 @@ const App: React.FC = () => {
         try {
             await api.deleteAttachment(taskId, fileId);
             // Refetch tasks and files
-            const [updatedTasks, updatedFiles] = await Promise.all([
-                api.getTasks(),
-                api.getFiles()
-            ]);
-            setTasks(updatedTasks);
+            const tasksResponse = await api.getTasks(pagination.page, 15);
+            const updatedFiles = await api.getFiles();
+            setTasks(tasksResponse.tasks);
+            setPagination(tasksResponse.pagination);
             setFiles(updatedFiles);
         } catch (error) {
             console.error("Failed to delete attachment", error);
             alert(`Error deleting attachment: ${(error as Error).message}`);
         }
+    };
+
+    const handlePageChange = async (newPage: number) => {
+        await fetchAppData(newPage);
     };
 
     const handleAddUser = async (email: string, role: Role) => {
@@ -286,6 +291,8 @@ const App: React.FC = () => {
                     currentUser={currentUser}
                     tasks={tasks}
                     users={users}
+                    pagination={pagination}
+                    onPageChange={handlePageChange}
                     onSelectTask={handleSelectTask}
                     onCreateTask={handleCreateTask}
                     onAddUser={handleAddUser}
